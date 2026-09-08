@@ -117,3 +117,5 @@
 - 08:35 ICU の対処に着手。確認: `build.json` に ICU のコンパイル手順は 0 件（`rules_foreign_cc` の configure/make は Bazel の 1 アクションで、per-file の記録に出ない）。ネイティブの `libicuuc.a` 等は x86 なので使えない。ICU 76.1 のソースを `build/icu/src` に複製し、`tools/build_icu_wasm.sh` で「ホスト向けに道具をビルド → `--with-cross-build` で wasm32-wasip1 向けに静的ビルド」を実行中。できた `.a` は `wasm_build.prebuilt_archives` で wasmify に渡す
 - 判断（配布）: wazero 版も cgo 不要の単一バイナリなので、**spnls にはまず wazero 版（wasm 14.8 MB 同梱）を組み込む**。純 Go 版（720 MB）は別モジュールで後から
 - 08:50 **wasm2go の不具合の原因を訂正**: 玩具で 4 通り試した結果、arm64 アセンブリが壊れるのは **import path にハイフンが含まれるとき**（3 万行混入）。モジュール配下かどうかは無関係（ハイフン無しなら配下でも 0 行）。amd64 は常に無傷。`go-spanner-analyzer` にハイフンがあるため配下に置くと踏んだ、が正しい説明。再現手順を `docs/wasm2go-arm64-hyphen.md` に記録
+- 08:45 **ICU 76.1 を wasm32-wasip1 向けにビルドできた**（`tools/build_icu_wasm.sh`、11 分）: `libicuuc.a` 2.7 MB、`libicui18n.a` 4.8 MB。ICU の `configure` は wasm を知らないので `mh-linux` を使うよう 1 行足した。最後の `packagedata` だけ失敗（ICU の `genccode` が wasm の .o を ELF として読めない）→ データは `genccode -e icudt76`（C 配列出力）→ wasi clang でコンパイル → `libicudata.a` 31.9 MB、として別途作成。入口シンボルは `icudt76_dat`
+- 次: 通し実行の完了後、`wasm_build.prebuilt_archives` に 3 つを渡して wasm を作り直し、外部参照 87 個の減少と wazero 版テストを確認
