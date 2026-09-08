@@ -1,9 +1,9 @@
 diff --git a/backend/schema/facade/BUILD b/backend/schema/facade/BUILD
 new file mode 100644
-index 0000000..5b8a9ee
+index 0000000..205ee06
 --- /dev/null
 +++ b/backend/schema/facade/BUILD
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,65 @@
 +# Copyright 2026 Taichi Araki (go-spanner-analyzer)
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,6 +58,7 @@ index 0000000..5b8a9ee
 +    hdrs = ["facade.h"],
 +    deps = [
 +        ":types",
++        ":syntax",
 +        "//backend/common:ids",
 +        "//backend/database/pg_oid_assigner",
 +        "//backend/schema/catalog:schema",
@@ -144,10 +145,10 @@ index 0000000..8e4b935
 +}  // namespace spanner_analyzer
 diff --git a/backend/schema/facade/facade.h b/backend/schema/facade/facade.h
 new file mode 100644
-index 0000000..920b6b3
+index 0000000..4c3f3da
 --- /dev/null
 +++ b/backend/schema/facade/facade.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +// Copyright 2026 Taichi Araki (go-spanner-analyzer)
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -170,6 +171,7 @@ index 0000000..920b6b3
 +#include <string>
 +#include <vector>
 +
++#include "backend/schema/facade/syntax.h"  // re-export ParseDDL so one target exposes both
 +#include "backend/schema/facade/types.h"
 +
 +namespace spanner_analyzer {
