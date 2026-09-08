@@ -69,3 +69,5 @@
 - 06:35 `wasm-build` 再開は 892 手順目 `change_stream.grpc.pb.cc` で停止（gRPC の `port_platform.h` が wasm を判別できない）。調べると**残り約 5,470 手順のうち約 3,700 が gRPC 一式**（grpc core 1,332、boringssl 806、envoy_api 692、google_cloud_cpp 300、c-ares 182、xds 182、upb 106）。first-party のコードは gRPC をほぼ使っておらず（`common/config` の関数名のみ）、BUILD の `deps` に `@com_github_grpc_grpc//:grpc++` が約 90 箇所書かれていただけ
 - 06:40 対処: `backend/` と `common/` の BUILD から `grpc++` の依存を機械的に削除、`spanner_cc_grpc` → `spanner_cc_proto` に置換（MODIFIED 注記付き）。ネイティブ再ビルドと `bazel query` で確認中。google-cloud-cpp の `bytes.h` を include する 2 ファイル（`transaction/actions.cc`、`actions/change_stream.cc`）は実際には `absl::Base64Escape` を使っていて include が死んでいるので、次に外す
 - 見込み: gRPC 一式を外せば wasm のコンパイル対象は約 1,800 手順に減り、`wasm-build` の所要時間も 1 時間台に収まる
+- 06:50 **gRPC 依存を外した木でネイティブビルド成功**（4 分、30 手順）。`bazel query` で `facade` の推移的依存に gRPC・boringssl・envoy・c-ares・xds は 0 件。編集した BUILD は 23 件
+- 06:52 google-cloud-cpp の死んだ include（`google/cloud/spanner/bytes.h`、2 ファイル）と BUILD 依存も除去。記録の取り直しから `wasm-build` までを一続きで再実行中（依存が変わり引数も変わるため、`validate-build` と `wasm-build` の多くはキャッシュが効かず作り直しになる見込み: 合わせて 2 時間前後）
