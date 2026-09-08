@@ -75,3 +75,4 @@
 - 07:55 対処: wasmify 同梱の stub ヘッダを `skip.deploy_stub_headers: ["net/if.h"]` で配置して再開（残り約 730 手順 ＋ リンク）。他に wasi に無いヘッダを直接 include するソースは 14 件あるが、いずれも wasmify の互換ヘッダ（`sys/socket.h` `netdb.h` `sys/mman.h` `dlfcn.h` など）で通る見込み
 - 08:00 `net/if.h` の stub は効いた。次は 1,799 手順目 `googlesql/base/net/public_suffix_oss.cc`（NET.REG_DOMAIN 等）が libc++ で型変換エラー。外部の NET 関数実装で DDL 検証に不要
 - 08:02 `wasm-build` を「外部ソースで失敗したら `skip.files` に加えて再開、first-party で失敗したら停止」のループで実行中（キャッシュにより 1 周は短い）
+- 08:20 **本命版（`ValidateDDL`）の wasm が完成。** `spanner_emulator.wasm` 14.8 MB（wasm-opt 前 20.4 MB）。1,823 手順（compile 1,261、archive 556、skip 6、cache 1,441）、526 archive をリンク。自動除外ループは 2 周で成功（追加除外は `public_suffix_oss.cc` の 1 件）。`build/full/` に退避
