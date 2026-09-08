@@ -73,3 +73,5 @@
 - 06:52 google-cloud-cpp の死んだ include（`google/cloud/spanner/bytes.h`、2 ファイル）と BUILD 依存も除去。記録の取り直しから `wasm-build` までを一続きで再実行中（依存が変わり引数も変わるため、`validate-build` と `wasm-build` の多くはキャッシュが効かず作り直しになる見込み: 合わせて 2 時間前後）
 - 07:50 **gRPC 除去後の再記録**: 手順数 8,860 → 4,200（compile 2,532）。`validate-build` は全件キャッシュ。`gen-proto` は `ParseDDL` `ValidateDDL` の 2 本。`wasm-build` は 51 分走り、1,797 手順目 `googlesql/base/net/ipaddress_oss.cc`（NET 関数用）で `<net/if.h>` 不足により停止
 - 07:55 対処: wasmify 同梱の stub ヘッダを `skip.deploy_stub_headers: ["net/if.h"]` で配置して再開（残り約 730 手順 ＋ リンク）。他に wasi に無いヘッダを直接 include するソースは 14 件あるが、いずれも wasmify の互換ヘッダ（`sys/socket.h` `netdb.h` `sys/mman.h` `dlfcn.h` など）で通る見込み
+- 08:00 `net/if.h` の stub は効いた。次は 1,799 手順目 `googlesql/base/net/public_suffix_oss.cc`（NET.REG_DOMAIN 等）が libc++ で型変換エラー。外部の NET 関数実装で DDL 検証に不要
+- 08:02 `wasm-build` を「外部ソースで失敗したら `skip.files` に加えて再開、first-party で失敗したら停止」のループで実行中（キャッシュにより 1 周は短い）
