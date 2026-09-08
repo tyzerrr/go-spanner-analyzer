@@ -64,3 +64,5 @@
 - 05:10 **P3（本命版）1 回目の結果**: `wasmify build` は 8,855 手順を記録（compile 5,472）。`validate-build` に 2 時間 50 分（googlesql 等をネイティブで再コンパイル）。`parse-headers` は 799 関数 / 554 クラス。`gen-proto` は `ValidateDDL` のみ公開（`ParseDDL` は `facade` の到達ヘッダに無かった）。**`wasm-build` は 3,289 手順を skip して 0.3 MB の wasm しか作れず失敗扱い**。原因は `fix_build_json` を `validate-build` の前に実行したこと（その時点では出力が無く、5,716 手順の skip を外せなかった）
 - 05:12 対処 2 点: (1) `facade.h` が `syntax.h` を include し `facade` が `:syntax` に依存するよう修正（1 つの的で `ParseDDL` と `ValidateDDL` の両方を公開）。(2) パイプラインの順序を `validate-build` → `fix_build_json` に直して再実行。`validate-build` はキャッシュが効く見込み。`wasm-build` は直列実行なので、約 5,000 手順で数時間かかる見込み
 - 判断: wasmify の `wasm-build` に並列実行の選択肢は無い（ソース確認）。長時間かかるのは受け入れる
+- 06:20 **P3 再実行**: `validate-build` は全 8,860 手順がキャッシュ命中（1 秒）。`fix_build_json` で 5,818 手順の skip を解除（残り 4）。`gen-proto` は `ParseDDL` と `ValidateDDL` の 2 本を公開。`wasm-build` は 61 分走って 817 手順目の `backend/query/remote_udf/remote_udf_evaluator.cc` で停止: `httplib.h` 経由で `<net/if.h>` が要る（wasi に無い）。遠隔 UDF の HTTP 呼び出し用で、DDL 検証には不要
+- 06:22 対処: ネットワーク系ヘッダを含む first-party ソースを洗い出して `skip.files` に入れ（`wasmify.json` と `tools/set_bridge.py` の両方）、`wasm-build` を再開。816 手順分はキャッシュされているので、続きから進む

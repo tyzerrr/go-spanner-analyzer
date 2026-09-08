@@ -39,6 +39,7 @@ d["skip"] = {"files": [
     {"path": "external/abseil-cpp~/absl/debugging/stacktrace.cc", "reason": "stack unwind helpers depend on host arch (no wasm32 backend)"},
     {"path": "external/abseil-cpp~/absl/base/internal/raw_logging.cc", "reason": "uses platform-specific syscalls; logging is unused in the bridged API surface"},
     {"path": "external/abseil-cpp~/absl/time/internal/cctz/src/time_zone_libc.cc", "reason": "libc time-zone backend not present in wasi-libc"},
+    {"path": "backend/query/remote_udf/remote_udf_evaluator.cc", "reason": "uses httplib.h; networking is not available under wasi and not needed for DDL validation"},
     {"path": "external/abseil-cpp~/absl/log/internal/globals.cc", "reason": "uses platform-specific log infrastructure; bridged API surface does not log"},
 ]}
 json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)

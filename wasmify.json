@@ -44,6 +44,32 @@
         "backend/schema/updater/schema_updater.h"
       ],
       "description": "DDL からスキーマを組み立てて検証する本命。現状は PostgreSQL 実装に依存するのでパッチが要る。"
+    },
+    {
+      "name": "facade_syntax",
+      "type": "library",
+      "build_target": "//backend/schema/facade:syntax",
+      "source_dirs": [
+        "backend/schema/facade"
+      ],
+      "public_headers": [
+        "backend/schema/facade/syntax.h",
+        "backend/schema/facade/types.h"
+      ],
+      "description": "構文のみの検証（ParseDDL）。ddl_parser だけに依存する最初の wasm の的。"
+    },
+    {
+      "name": "facade",
+      "type": "library",
+      "build_target": "//backend/schema/facade:facade",
+      "source_dirs": [
+        "backend/schema/facade"
+      ],
+      "public_headers": [
+        "backend/schema/facade/facade.h",
+        "backend/schema/facade/types.h"
+      ],
+      "description": "意味検証（ValidateDDL）。SchemaUpdater に依存する本命。PostgreSQL 除去パッチが前提。"
     }
   ],
   "required_tools": [
@@ -64,7 +90,7 @@
         },
         "debian": {
           "commands": [
-            "apt-get update \u0026\u0026 apt-get install -y default-jdk-headless"
+            "apt-get update && apt-get install -y default-jdk-headless"
           ]
         }
       }
@@ -75,8 +101,93 @@
     "build": "bazel build -c opt"
   },
   "user_selection": {
-    "target_name": "ddl_parser",
+    "target_name": "facade",
     "build_type": "library"
   },
-  "analyzed_at": "2026-09-08T15:04:00Z"
+  "bridge": {
+    "ExternalTypes": [
+      "absl::Status",
+      "absl::StatusOr",
+      "absl::string_view",
+      "absl::Span",
+      "absl::Time",
+      "absl::TimeZone",
+      "googlesql_base::Status",
+      "googlesql_base::StatusOr",
+      "RE2",
+      "google::protobuf::Descriptor",
+      "google::protobuf::DescriptorPool",
+      "google::protobuf::EnumDescriptor",
+      "google::protobuf::EnumValueDescriptor",
+      "google::protobuf::FieldDescriptor",
+      "google::protobuf::FileDescriptor",
+      "google::protobuf::FileDescriptorProto",
+      "google::protobuf::FileDescriptorSet",
+      "google::protobuf::OneofDescriptor"
+    ],
+    "ErrorTypes": {
+      "absl::Status": "if (!{result}.ok()) { _pw.write_error(std::string({result}.message())); }",
+      "absl::StatusOr": "if (!{result}.ok()) { _pw.write_error(std::string({result}.status().message())); }",
+      "googlesql_base::Status": "if (!{result}.ok()) { _pw.write_error(std::string({result}.message())); }",
+      "googlesql_base::StatusOr": "if (!{result}.ok()) { _pw.write_error(std::string({result}.status().message())); }"
+    },
+    "GoPackage": "github.com/tyzerrr/go-spanner-analyzer;spanneranalyzer",
+    "Wasm2GoImportPath": "github.com/tyzerrr/spanneranalyzerwasm2go",
+    "ExportFunctions": [
+      "spanner_analyzer::ParseDDL",
+      "spanner_analyzer::ValidateDDL"
+    ],
+    "ExportDependentLibraries": {
+      "googlesql": false,
+      "protobuf": false
+    }
+  },
+  "skip": {
+    "files": [
+      {
+        "path": "external/abseil-cpp~/absl/debugging/symbolize.cc",
+        "reason": "stack symbolization is host-platform-specific and not bridgeable to wasi"
+      },
+      {
+        "path": "external/abseil-cpp~/absl/debugging/stacktrace.cc",
+        "reason": "stack unwind helpers depend on host arch (no wasm32 backend)"
+      },
+      {
+        "path": "external/abseil-cpp~/absl/base/internal/raw_logging.cc",
+        "reason": "uses platform-specific syscalls; logging is unused in the bridged API surface"
+      },
+      {
+        "path": "external/abseil-cpp~/absl/time/internal/cctz/src/time_zone_libc.cc",
+        "reason": "libc time-zone backend not present in wasi-libc"
+      },
+      {
+        "path": "external/abseil-cpp~/absl/log/internal/globals.cc",
+        "reason": "uses platform-specific log infrastructure; bridged API surface does not log"
+      },
+      {
+        "path": "backend/query/remote_udf/remote_udf_evaluator.cc",
+        "reason": "uses httplib.h; networking is not available under wasi and not needed for DDL validation"
+      }
+    ]
+  },
+  "phases": {
+    "gen-proto": {
+      "completed_at": "2026-09-08T20:21:14Z",
+      "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
+      "output_files": [
+        "proto/spanneranalyzer.proto",
+        "proto/wasmify/options.proto",
+        "bridge/api_bridge.cc",
+        "bridge/api_bridge.h"
+      ]
+    },
+    "parse-headers": {
+      "completed_at": "2026-09-08T20:21:14Z",
+      "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
+      "output_files": [
+        "api-spec.json"
+      ]
+    }
+  },
+  "analyzed_at": "2026-09-08T15:21:36Z"
 }
