@@ -46,3 +46,5 @@
 - 01:04 P2 再ビルド 2 回目は OOM（`resolved_ast.cc` のコンパイル中に `cc1plus` が Killed）。`wasm-build` と同時実行していたための資源不足。単独で `--memory=18g --jobs=3 --local_resources=memory=12000` で 3 回目を実行中。`remote_udf_evaluator.cc` のエラーは 2 回目のログに出ていない
 - 01:58 **P2 ネイティブビルド 3 回目**: 53 分、949 手順（googlesql の大半をコンパイル）。失敗は `backend/actions/change_stream.cc:71` の 1 箇所（`google::spanner::v1` 未宣言。`remote_udf` と同種）。`remote_udf_evaluator.cc` の修正は通過
 - 01:59 対処: パッチで触った全ファイルを走査し、`spanner::v1` を使っていて `google/spanner/v1/*.pb.h` を直接 include していないものすべてに include と BUILD の依存を追加。4 回目を実行中（差分ビルドなので短いはず）
+- 02:04 **P2 完了: パッチ適用済みの `//backend/schema/facade:facade` と `:syntax` がネイティブでビルド成功**（4 回目、4 分 18 秒、差分 32 手順）。PostgreSQL 除去パッチ（29 ファイル、+139/−943）は Bazel の依存解決と gcc のコンパイルの両方で成立。上流由来の見落としは `remote_udf_evaluator.cc` と `change_stream.cc` の 2 箇所（`google/spanner/v1/type.pb.h` の直接 include が必要）で、いずれも修正済み
+- 02:05 `patches/0001` を最新化。構文版の `wasm-build` を単独で再開（Bazel と直列）
