@@ -34,7 +34,8 @@ d["bridge"] = {
     "Wasm2GoImportPath": "github.com/tyzerrr/spanneranalyzerwasm2go",
 }
 # googlesql-wasm が wasi で除外している absl のファイル（ホスト依存）
-d["skip"] = {"files": [
+# wasi に無いヘッダは wasmify 同梱の stub を配置する（googlesql の NET 関数が net/if.h を使う）
+d["skip"] = {"deploy_stub_headers": ["net/if.h"], "files": [
     {"path": "external/abseil-cpp~/absl/debugging/symbolize.cc", "reason": "stack symbolization is host-platform-specific and not bridgeable to wasi"},
     {"path": "external/abseil-cpp~/absl/debugging/stacktrace.cc", "reason": "stack unwind helpers depend on host arch (no wasm32 backend)"},
     {"path": "external/abseil-cpp~/absl/base/internal/raw_logging.cc", "reason": "uses platform-specific syscalls; logging is unused in the bridged API surface"},

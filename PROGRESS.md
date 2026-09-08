@@ -71,3 +71,5 @@
 - 見込み: gRPC 一式を外せば wasm のコンパイル対象は約 1,800 手順に減り、`wasm-build` の所要時間も 1 時間台に収まる
 - 06:50 **gRPC 依存を外した木でネイティブビルド成功**（4 分、30 手順）。`bazel query` で `facade` の推移的依存に gRPC・boringssl・envoy・c-ares・xds は 0 件。編集した BUILD は 23 件
 - 06:52 google-cloud-cpp の死んだ include（`google/cloud/spanner/bytes.h`、2 ファイル）と BUILD 依存も除去。記録の取り直しから `wasm-build` までを一続きで再実行中（依存が変わり引数も変わるため、`validate-build` と `wasm-build` の多くはキャッシュが効かず作り直しになる見込み: 合わせて 2 時間前後）
+- 07:50 **gRPC 除去後の再記録**: 手順数 8,860 → 4,200（compile 2,532）。`validate-build` は全件キャッシュ。`gen-proto` は `ParseDDL` `ValidateDDL` の 2 本。`wasm-build` は 51 分走り、1,797 手順目 `googlesql/base/net/ipaddress_oss.cc`（NET 関数用）で `<net/if.h>` 不足により停止
+- 07:55 対処: wasmify 同梱の stub ヘッダを `skip.deploy_stub_headers: ["net/if.h"]` で配置して再開（残り約 730 手順 ＋ リンク）。他に wasi に無いヘッダを直接 include するソースは 14 件あるが、いずれも wasmify の互換ヘッダ（`sys/socket.h` `netdb.h` `sys/mman.h` `dlfcn.h` など）で通る見込み

@@ -161,18 +161,21 @@
         "reason": "libc time-zone backend not present in wasi-libc"
       },
       {
-        "path": "external/abseil-cpp~/absl/log/internal/globals.cc",
-        "reason": "uses platform-specific log infrastructure; bridged API surface does not log"
-      },
-      {
         "path": "backend/query/remote_udf/remote_udf_evaluator.cc",
         "reason": "uses httplib.h; networking is not available under wasi and not needed for DDL validation"
+      },
+      {
+        "path": "external/abseil-cpp~/absl/log/internal/globals.cc",
+        "reason": "uses platform-specific log infrastructure; bridged API surface does not log"
       }
+    ],
+    "deploy_stub_headers": [
+      "net/if.h"
     ]
   },
   "phases": {
     "gen-proto": {
-      "completed_at": "2026-09-08T20:21:14Z",
+      "completed_at": "2026-09-08T21:46:28Z",
       "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
       "output_files": [
         "proto/spanneranalyzer.proto",
@@ -182,7 +185,7 @@
       ]
     },
     "parse-headers": {
-      "completed_at": "2026-09-08T20:21:14Z",
+      "completed_at": "2026-09-08T21:46:28Z",
       "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
       "output_files": [
         "api-spec.json"
