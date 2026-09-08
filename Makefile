@@ -1,5 +1,6 @@
 # go-spanner-analyzer: wasmify のパイプラインを Docker の中で回す。
 # Bazel のキャッシュは名前付きボリュームに残す（--rm でも消えない）。
+# 注意: Bazel を使う段階（build/headers）と wasm-build は同じ実行ルートを共有するので、同時に走らせない。
 IMAGE    ?= ghcr.io/goccy/wasmify:edge
 PLATFORM ?= linux/amd64
 MEMORY   ?= 18g

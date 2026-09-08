@@ -41,3 +41,5 @@
 - 00:56 修正版の `fix_build_json` が効いた: `unskipped=1014, remaining skip=0/1356`。`wasm-build` が 762 手順の本コンパイルを開始（P1b の本番）
 - 00:47 **P2 ネイティブビルド 1 回目**: 6 分 24 秒、1,124 手順。失敗は 1 箇所だけ。`backend/query/remote_udf/remote_udf_evaluator.cc:67` で `google::spanner::v1::TypeAnnotationCode` が見つからない（`google/spanner/v1/type.pb.h` が消した PostgreSQL のヘッダ経由で間接的に入っていた）。パッチ 0001 の他の 28 ファイルはコンパイルを通過
 - 00:57 対処: 直接 include と `@com_google_googleapis//google/spanner/v1:spanner_cc_proto` の依存を追加（MODIFIED 注記付き）。再ビルド中
+- 01:00 `wasm-build` 4 回目は 48 手順目（`common/errors.cc`）で `googlesql/base/status_macros.h` が見つからず失敗。ヘッダは実在し include 指定も正しい。原因は**競合**: 同時に走らせた本命版の Bazel 再ビルドが、開始時に実行ルートの `external/*` のシンボリックリンクを作り直し、その瞬間に `wasm-build` の include が辿れなくなった（リンクの作成時刻 15:49 と失敗時刻 15:48 が一致）
+- 判断: **Bazel のビルドと `wasm-build` は同じ実行ルートを共有するので同時に動かさない。** 以後は直列。`wasm-build` は本命版の再ビルド完了後に再開する（成功済みの 47 手順はキャッシュを使う）
