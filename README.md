@@ -1,6 +1,6 @@
 # go-spanner-analyzer
 
-Spanner エミュレータの DDL 検証部分を純 Go のライブラリにしたもの（作業中）。
+Spanner エミュレータの DDL 検証部分を純 Go のライブラリにしたもの（2026-09-09 時点で `ParseDDL` / `ValidateDDL` が動作。公開の形は整備中）。
 
 エミュレータ（C++）を wasmify で wasm32-wasip1 にビルドし、wasm2go で Go に変換する。
 cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と同じ DDL の意味検証ができることを目指す。
@@ -8,7 +8,7 @@ cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と
 | 段階 | 公開する関数 | 状態 |
 |---|---|---|
 | 1 | `ParseDDL(ddls []string)` 構文のみ | **動作確認済み**（wazero 版、wasm2go 版 amd64/arm64。linux/windows/darwin へクロスコンパイル可） |
-| 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | **動作確認済み**（wazero 版。親テーブル無し・主キーに ARRAY・主キーに無い列・索引に無い列・重複を本物と同じ文言で検出） |
+| 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | **動作確認済み**（wazero 版と純 Go 版の両方。親テーブル無し・主キーに ARRAY・主キーに無い列・索引に無い列・重複を本物と同じ文言で検出） |
 | 3 | `AnalyzeQuery(sql string)` クエリの意味解析 | 未着手 |
 
 Day1 は GoogleSQL 方言のみ。PostgreSQL 方言はビルドから外している（`patches/`）。

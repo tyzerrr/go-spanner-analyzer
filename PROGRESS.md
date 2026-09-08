@@ -1,5 +1,32 @@
 # 進捗記録
 
+## 朝のまとめ（2026-09-09 08:10 時点）
+
+**結論: エミュレータの DDL 意味検証を、cgo も外部プロセスも無しの純 Go として動かせた。**
+
+| 段階 | 状態 |
+|---|---|
+| 構文のみ `ParseDDL` | 完了。wazero 版 / 純 Go 版（amd64・arm64）で動作。他 OS へクロスコンパイル可 |
+| 意味まで `ValidateDDL` | **完了。** wazero 版 / 純 Go 版（arm64）で動作。5 種の意味エラーを本物と同じ文言で検出 |
+| クエリ `AnalyzeQuery` | 未着手（第 3 段階） |
+
+数字: 本命 wasm 14.8 MB → 純 Go 720 MB（3,800 万行）。wasm2go 変換 7 分・13.3 GB（ホストで実行）。テストはビルド込み 21 秒、`ValidateDDL` 自体は瞬時。
+
+やったこと（詳細は下の時系列）:
+1. `patches/0001`: PostgreSQL 方言・gRPC・google-cloud-cpp を依存から外す（44 ファイル）。コンパイル対象が 8,860 → 1,823 手順に
+2. `patches/0002`: ファサード `backend/schema/facade/`（`ParseDDL` `ValidateDDL`）
+3. wasmify の落とし穴を 3 つ道具で回避: GCC 専用フラグ（`tools/fix_build_json.py`）、差分ビルドでの誤 skip（同上、`validate-build` の後に実行）、wasm2go の import path はモジュール外にする（`tools/set_bridge.py`）
+4. wasm2go は Docker 内で OOM するのでホストで実行（`tools/gen_go_host.sh`、`make go-host`）
+
+残っている課題:
+- **ICU が wasm にリンクされていない**（外部参照 87 個の大半）。`rules_foreign_cc` 製のため記録に入らない。ASCII の DDL には影響しないが、要対処（`wasm_build.prebuilt_archives`）
+- 公開の形: 生成物（720 MB）をどう配布するか。googlesql-wasm 同様、変換物は別モジュール `github.com/tyzerrr/spanneranalyzerwasm2go` として出す前提で `replace` を使っている
+- `facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）
+- wasm2go の arm64 不具合（モジュール配下の import path で壊れる）は上流に報告する
+- 手順の再現性: 今回は手作業が多かった。`Makefile` と `tools/` に集約したが、通しで再実行して確かめる
+
+再現の最短経路（ホスト）: `make classify STAGE=full && make build && make headers` の後に `python3 tools/fix_build_json.py`（コンテナ内、`validate-build` 後）→ `make bridge STAGE=full proto wasm` → `make go-host` → `build/wasm2go-host` で `go test`
+
 夜間作業のログ。新しいものが上。
 
 ## 2026-09-09
@@ -80,3 +107,4 @@
 - 08:31 wasm2go 版の生成は `tools/gen_go_host.sh` の不具合（buf の `--template` に拡張子無しの一時ファイルを渡すとインライン JSON と解釈される）で 1 回失敗。修正して再実行中
 - 注記: 本命版 wasm の外部参照（env import）は 87 個。ほとんどが absl のログ関連（`skip.files` で外した `log/internal/globals.cc` 等）だが、`googlesql::GetDefaultErrorMessageStability` など googlesql の関数も含まれる。`facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）。テストは通っているが、後で依存を足して 0 に近づける
 - 08:40 本命 wasm の外部参照 87 個の正体: 大半が **ICU**（`u_toupper_76`、`icu_76::RuleBasedCollator` など）と absl のログ関連。ICU は `rules_foreign_cc`（configure/make）で作られるので wasmify の Bazel 記録に入らず、wasm にリンクされていない。ASCII の DDL 検証には影響しないが、非 ASCII の照合・大文字小文字変換を使う経路では正しく動かない。**課題: ICU を wasm 向けにビルドして `wasm_build.prebuilt_archives` で渡す**（wasmify にその設定がある。googlesql-wasm も同じ問題を通ったはず）
+- 08:01 **wasm2go 版（純 Go、arm64）で `ParseDDL` と `ValidateDDL` のテスト成功。** 変換 7 分 17 秒・最大 13.3 GB（ホスト）。生成物 720 MB / 3,800 万行。テストはビルド込み 21 秒
