@@ -57,3 +57,5 @@
 - 02:19 **wasm2go 版（純 Go、`CGO_ENABLED=0`）で `ParseDDL` のテスト成功（amd64、Rosetta で実行）。** 純 Go 化の経路は端から端まで成立
 - 02:19 arm64 用アセンブリだけ壊れる: `p0/arm64.s` 26 万行・`p1/arm64.s` 5.6 万行に `github.com/tyzerrr/go-spanner-N(RSP)` `...-m+N(FP)` `...-lN+N(FP)` の形でモジュールパスが混入（amd64.s は無傷）。玩具（別 import path、分割なし）では起きなかった。wasm2go v0.5.15 の arm64 出力の不具合と見ている。切り分け中: wasm2go の import path をモジュール外（`github.com/tyzerrr/spanneranalyzerwasm2go`、googlesql-wasm と同じ流儀）にして再生成
 - 02:22 **arm64 の混入の原因を切り分け**: wasm2go の import path をモジュール外（`github.com/tyzerrr/spanneranalyzerwasm2go`）にして再生成すると、`p0/arm64.s` の混入が 0 行になった。モジュール配下のパスを指定したことが引き金。`tools/set_bridge.py` と `tests/go/go.mod.txt`（`replace` 付き）を修正。wasm2go 側には後で報告する
+- 02:24 **第 1 段階（`ParseDDL`）完了。** arm64 ネイティブの純 Go（`CGO_ENABLED=0`）でもテスト成功（実行 0.00 秒、ビルド込み 3.4 秒）。wazero 版・wasm2go 版 amd64・wasm2go 版 arm64 のすべてで動作
+- 02:26 ホストで Go を生成する手順を `tools/gen_go_host.sh` と `make go-host` に道具化（wasmify のプラグインを固定した版でビルドして使う）

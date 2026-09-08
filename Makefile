@@ -27,5 +27,7 @@ bridge:   ; python3 tools/set_bridge.py $(STAGE)
 proto:    ; $(DOCKER) wasmify gen-proto --package $(PACKAGE)
 wasm:     ; $(DOCKER) wasmify wasm-build --optimize --non-interactive --no-cache
 go:       ; $(DOCKER) buf generate
+# wasm2go はメモリを食うのでホストで生成する（Docker 内では OOM になった）
+go-host:  ; mkdir -p build/proto-host && cp -R proto/. build/proto-host/ && cp tools/proto-buf.yaml build/proto-host/buf.yaml && tools/gen_go_host.sh build/proto-host .wasmify/wasm-build/output/spanner_emulator.wasm build/wasm2go-host
 all: arch classify build headers bridge proto wasm go
 shell:    ; $(DOCKER) bash
