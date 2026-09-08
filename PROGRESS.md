@@ -108,3 +108,4 @@
 - 注記: 本命版 wasm の外部参照（env import）は 87 個。ほとんどが absl のログ関連（`skip.files` で外した `log/internal/globals.cc` 等）だが、`googlesql::GetDefaultErrorMessageStability` など googlesql の関数も含まれる。`facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）。テストは通っているが、後で依存を足して 0 に近づける
 - 08:40 本命 wasm の外部参照 87 個の正体: 大半が **ICU**（`u_toupper_76`、`icu_76::RuleBasedCollator` など）と absl のログ関連。ICU は `rules_foreign_cc`（configure/make）で作られるので wasmify の Bazel 記録に入らず、wasm にリンクされていない。ASCII の DDL 検証には影響しないが、非 ASCII の照合・大文字小文字変換を使う経路では正しく動かない。**課題: ICU を wasm 向けにビルドして `wasm_build.prebuilt_archives` で渡す**（wasmify にその設定がある。googlesql-wasm も同じ問題を通ったはず）
 - 08:01 **wasm2go 版（純 Go、arm64）で `ParseDDL` と `ValidateDDL` のテスト成功。** 変換 7 分 17 秒・最大 13.3 GB（ホスト）。生成物 720 MB / 3,800 万行。テストはビルド込み 21 秒
+- 08:15 本命版（純 Go）のクロスコンパイル:   linux/amd64 OK (57s)   linux/arm64 OK (19s)   windows/amd64 OK (56s) 
