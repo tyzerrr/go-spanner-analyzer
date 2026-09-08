@@ -1,27 +1,30 @@
-WASMIFY := wasmify
-# Path to the upstream C/C++ project. Override on CI if your layout differs:
-#   make wasm PROJECT=./path/to/upstream
-PROJECT ?= ./cloud-spanner-emulator
-OUTPUT_DIR := .
+# go-spanner-analyzer: wasmify のパイプラインを Docker の中で回す。
+# Bazel のキャッシュは名前付きボリュームに残す（--rm でも消えない）。
+IMAGE    ?= ghcr.io/goccy/wasmify:edge
+PLATFORM ?= linux/amd64
+MEMORY   ?= 18g
+CPUS     ?= 6
+STAGE    ?= syntax
+PACKAGE  ?= spanneranalyzer
+TARGET_syntax = facade_syntax
+TARGET_full   = facade
+TARGET = $(TARGET_$(STAGE))
 
-.PHONY: all update wasm tools clean
+DOCKER = docker run --rm --platform $(PLATFORM) \
+  -v $(CURDIR):/work -w /work \
+  -v go-spanner-analyzer-bazel:/root/.cache/bazel \
+  -v go-spanner-analyzer-bazelisk:/root/.cache/bazelisk \
+  --memory=$(MEMORY) --cpus=$(CPUS) $(IMAGE)
 
-# Install tools listed in arch.json (cmake, bazel, ...) plus wasi-sdk. Safe to
-# re-run; already-installed tools are skipped.
-tools:
-	$(WASMIFY) ensure-tools $(PROJECT) --output-dir $(OUTPUT_DIR)
+.PHONY: arch classify build headers bridge proto wasm go all shell
 
-# Upstream changes: detect and re-run only the affected phases.
-update:
-	$(WASMIFY) update $(PROJECT) --output-dir $(OUTPUT_DIR)
-
-# Build wasm binary. Depends on tools so CI runners do not need any
-# pre-installed build dependencies beyond wasmify itself. --optimize
-# chains a binaryen wasm-opt pass after the link.
-wasm: tools
-	$(WASMIFY) wasm-build --optimize --non-interactive --output-dir $(OUTPUT_DIR)
-
-all: update wasm
-
-clean:
-	rm -rf wasm/*.wasm
+arch:     ; $(DOCKER) bash -c 'wasmify save-arch < arch.json'
+classify: ; $(DOCKER) wasmify classify --target $(TARGET)
+build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify generate-build'
+headers:  ; $(DOCKER) bash -c 'wasmify validate-build && wasmify parse-headers'
+bridge:   ; python3 tools/set_bridge.py $(STAGE)
+proto:    ; $(DOCKER) wasmify gen-proto --package $(PACKAGE)
+wasm:     ; $(DOCKER) wasmify wasm-build --optimize --non-interactive --no-cache
+go:       ; $(DOCKER) buf generate
+all: arch classify build headers bridge proto wasm go
+shell:    ; $(DOCKER) bash
