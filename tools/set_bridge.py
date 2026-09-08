@@ -43,5 +43,15 @@ d["skip"] = {"deploy_stub_headers": ["net/if.h"], "files": [
     {"path": "backend/query/remote_udf/remote_udf_evaluator.cc", "reason": "uses httplib.h; networking is not available under wasi and not needed for DDL validation"},
     {"path": "external/abseil-cpp~/absl/log/internal/globals.cc", "reason": "uses platform-specific log infrastructure; bridged API surface does not log"},
 ]}
+# ICU は rules_foreign_cc 製で wasmify の記録に入らないため、tools/build_icu_wasm.sh で
+# wasm32 向けに作った .a を最後にリンクする（コンテナ内の絶対パス）。無ければ何もしない
+import os
+icu = ["/work/build/icu/wasm/lib/libicui18n.a", "/work/build/icu/wasm/lib/libicuuc.a", "/work/build/icu/wasm/lib/libicudata.a"]
+host_icu = [x.replace("/work/", os.path.dirname(os.path.abspath(p)) + "/") for x in icu]
+if all(os.path.exists(x) for x in host_icu):
+    d.setdefault("wasm_build", {})["prebuilt_archives"] = icu
+    print("prebuilt_archives: ICU の 3 つを設定")
+else:
+    print("prebuilt_archives: ICU の .a が未生成なので設定しない（tools/build_icu_wasm.sh を先に実行）")
 json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
 print(f"bridge written for stage={stage}: {exports}")
