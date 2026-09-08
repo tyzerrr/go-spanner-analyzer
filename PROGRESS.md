@@ -22,3 +22,6 @@
 - 00:03 リポジトリ作成、サブモジュール追加、`wasmify init`
 - 00:04 `save-arch`、`classify --target ddl_parser`
 - 00:05 P1a ビルド開始（Docker メモリ 20 GB、6 CPU、Rosetta）
+- 00:15 ファサードを書いた: `cloud-spanner-emulator/backend/schema/facade/`（`types.h` `syntax.{h,cc}`=ParseDDL 構文のみ、`facade.{h,cc}`=ValidateDDL 意味まで、`BUILD`）。上流の `tests/common/schema_constructor.cc` と同じ呼び方。サブモジュール内の新規ファイルなので、後でパッチ `0002-add-facade` として切り出す
+- 00:18 `arch.json` に `facade_syntax` `facade` の 2 的を追加。`tools/set_bridge.py`（bridge/skip 節の書き込み）、`buf.yaml`、`buf.gen.yaml` を用意。`save-arch` は P1a 完了後に実行（実行中の `wasmify build` と状態ファイルが競合するため）
+- 00:10 PostgreSQL 除去パッチの草案を補助エージェントに依頼（対象: schema_updater / validators / datamodel:types / query:catalog / query:function_catalog と各 BUILD。成果物は `patches/0001-remove-postgresql-dialect.patch`）

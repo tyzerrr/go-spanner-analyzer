@@ -8,37 +8,90 @@
   "build_system": {
     "type": "bazel",
     "version": "7.6.1",
-    "files": ["MODULE.bazel", "BUILD.bazel", ".bazelrc"]
+    "files": [
+      "MODULE.bazel",
+      "BUILD.bazel",
+      ".bazelrc"
+    ]
   },
   "targets": [
     {
       "name": "ddl_parser",
       "type": "library",
       "build_target": "//backend/schema/parser:ddl_parser",
-      "source_dirs": ["backend/schema/parser"],
-      "public_headers": ["backend/schema/parser/ddl_parser.h"],
+      "source_dirs": [
+        "backend/schema/parser"
+      ],
+      "public_headers": [
+        "backend/schema/parser/ddl_parser.h"
+      ],
       "description": "Spanner DDL（GoogleSQL 方言）の構文解析器。JavaCC で生成。PostgreSQL に依存しない最小の的。"
     },
     {
       "name": "schema_updater",
       "type": "library",
       "build_target": "//backend/schema/updater:schema_updater",
-      "source_dirs": ["backend/schema/updater"],
-      "public_headers": ["backend/schema/updater/schema_updater.h"],
+      "source_dirs": [
+        "backend/schema/updater"
+      ],
+      "public_headers": [
+        "backend/schema/updater/schema_updater.h"
+      ],
       "description": "DDL からスキーマを組み立てて検証する本命。現状は PostgreSQL 実装に依存するのでパッチが要る。"
+    },
+    {
+      "name": "facade_syntax",
+      "type": "library",
+      "build_target": "//backend/schema/facade:syntax",
+      "source_dirs": [
+        "backend/schema/facade"
+      ],
+      "public_headers": [
+        "backend/schema/facade/syntax.h",
+        "backend/schema/facade/types.h"
+      ],
+      "description": "構文のみの検証（ParseDDL）。ddl_parser だけに依存する最初の wasm の的。"
+    },
+    {
+      "name": "facade",
+      "type": "library",
+      "build_target": "//backend/schema/facade:facade",
+      "source_dirs": [
+        "backend/schema/facade"
+      ],
+      "public_headers": [
+        "backend/schema/facade/facade.h",
+        "backend/schema/facade/types.h"
+      ],
+      "description": "意味検証（ValidateDDL）。SchemaUpdater に依存する本命。PostgreSQL 除去パッチが前提。"
     }
   ],
   "required_tools": [
-    { "name": "bazel", "installed": true, "version": "7.6.1" },
+    {
+      "name": "bazel",
+      "installed": true,
+      "version": "7.6.1"
+    },
     {
       "name": "java",
       "installed": true,
       "detect_cmd": "command -v java",
       "install": {
-        "darwin": { "commands": ["brew install openjdk"] },
-        "debian": { "commands": ["apt-get update && apt-get install -y default-jdk-headless"] }
+        "darwin": {
+          "commands": [
+            "brew install openjdk"
+          ]
+        },
+        "debian": {
+          "commands": [
+            "apt-get update && apt-get install -y default-jdk-headless"
+          ]
+        }
       }
     }
   ],
-  "build_commands": { "configure": null, "build": "bazel build -c opt" }
+  "build_commands": {
+    "configure": null,
+    "build": "bazel build -c opt"
+  }
 }

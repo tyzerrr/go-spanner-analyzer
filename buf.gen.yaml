@@ -1,0 +1,18 @@
+version: v2
+inputs:
+  - directory: .
+    paths:
+      - proto/spanneranalyzer.proto
+plugins:
+  # wazero 版: wasm を //go:embed して実行時に解釈する（比較・動作確認用）
+  - local: protoc-gen-wasmify-go
+    out: build/wazero
+    opt:
+      - module=github.com/tyzerrr/go-spanner-analyzer
+  # wasm2go 版: wasm を Go ソースに変換する（配布する本命）
+  - local: protoc-gen-wasmify-go
+    out: build/wasm2go
+    opt:
+      - module=github.com/tyzerrr/go-spanner-analyzer
+      - runtime=wasm2go
+      - wasm=.wasmify/wasm-build/output/spanner_emulator.wasm
