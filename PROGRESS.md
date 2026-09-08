@@ -48,3 +48,8 @@
 - 01:59 対処: パッチで触った全ファイルを走査し、`spanner::v1` を使っていて `google/spanner/v1/*.pb.h` を直接 include していないものすべてに include と BUILD の依存を追加。4 回目を実行中（差分ビルドなので短いはず）
 - 02:04 **P2 完了: パッチ適用済みの `//backend/schema/facade:facade` と `:syntax` がネイティブでビルド成功**（4 回目、4 分 18 秒、差分 32 手順）。PostgreSQL 除去パッチ（29 ファイル、+139/−943）は Bazel の依存解決と gcc のコンパイルの両方で成立。上流由来の見落としは `remote_udf_evaluator.cc` と `change_stream.cc` の 2 箇所（`google/spanner/v1/type.pb.h` の直接 include が必要）で、いずれも修正済み
 - 02:05 `patches/0001` を最新化。構文版の `wasm-build` を単独で再開（Bazel と直列）
+- 02:08 **P1b: 構文版の wasm が完成**（`wasm-build` 17 分、379 コンパイル + 198 archive、`spanner_emulator.wasm` 1.56 MB、外部参照は例外・ログの受け口 13 個のみ）。**wazero 版の Go で `ParseDDL` のテストが通った**: エミュレータ本物の DDL 構文解析器が Go の中で動き、`Syntax error on line 1, column 31: Expecting 'NULL' but found ')'` などを返す。生成物は `build/syntax-wazero/` に退避
+- 02:15 ただし wasm2go 版は未完: run #5 の `buf generate` で `protoc-gen-wasmify-go` が **OOM で killed**（`signal: killed`、grep で終了コードが隠れていた）。`build/wasm2go` は古い 130 KB 版のままで、空スタブ 187 個はそれ由来
+- 02:20 対処: wasm2go はメモリ食いなので Docker（上限 20 GB、Rosetta）ではなく **ホストの Mac（48 GB、arm64 ネイティブ）で実行**。wasmify のソースからプラグインをビルドし、`build/syntax-proto/` を入力に `build/syntax-wasm2go-host/` へ生成中
+- 02:10 P3（本命版 `facade`）の wasmify パイプラインを開始（`classify` → `build` → `generate-build` → `fix_build_json` → `validate-build` → `parse-headers` → bridge(full) → `gen-proto` → `wasm-build`）。Bazel と `wasm-build` は直列
+- 教訓: パイプ越しの終了コードは `PIPESTATUS` で取る。`grep -v` で握りつぶすと OOM に気づけない
