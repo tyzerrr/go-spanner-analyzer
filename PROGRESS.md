@@ -35,3 +35,6 @@
 - 判断: wasmify は `-mllvm -wasm-enable-sjlj` を付けている（setjmp/longjmp の wasm 対応）。PostgreSQL を入れない方針は変えないが、将来 PG 方言を足す余地はある
 - 00:48 `wasm-build` 2 回目の失敗: 作業ディレクトリが Bazel の実行ルート（`/root/.cache/bazel/.../execroot/_main`）なので、`wasm-build` のコンテナにも Bazel のボリュームを付ける必要がある。付けて再開（Makefile の `DOCKER` は最初から付けてあるので、手で起動したときだけの見落とし）
 - 00:49 **P2 の第一関門を通過**: `bazel query "deps(//backend/schema/facade:facade)"` で `third_party/spanner_pg` のラベルが 0 件。パッチ 0001 は Bazel の依存解決の上でも PostgreSQL を切り離せている。ネイティブビルド（`facade` と `syntax`）を実行中
+- 00:52 `wasm-build` 3 回目の失敗の原因: `build.json` の 1,014/1,356 手順が `wasm_skip`（理由 "transient probe artifact: output deleted by the captured build"）。差分ビルドで作り直されなかった出力を、wasmify が「作られなかった」と誤判定した。wasm は 130 KB しかなく、生成 Go に空スタブが 187 個
+- 00:53 対処: `tools/fix_build_json.py` に「出力が実在する手順の `wasm_skip` を外す」処理を追加（コンテナ内、Bazel の実行ルートが見える場所で実行する必要がある）。`wasm-build --no-cache` を再開
+- 教訓: wasmify の記録は差分ビルドと相性が悪い。`wasmify build` の前に `bazel clean` するか、この道具で直す。Makefile では後者
