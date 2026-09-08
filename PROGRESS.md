@@ -61,3 +61,6 @@
 - 02:26 ホストで Go を生成する手順を `tools/gen_go_host.sh` と `make go-host` に道具化（wasmify のプラグインを固定した版でビルドして使う）
 - 02:30 純 Go 版（構文）のクロスコンパイル確認: linux/amd64、linux/arm64、windows/amd64、darwin/amd64 すべて OK（cgo なし、Apple Silicon の Mac 上で）。README の段階 1 を「動作確認済み」に
 - 02:30 P3（本命版）は `validate-build` の途中（googlesql をネイティブで再コンパイル中）。完了後に `parse-headers` → `gen-proto`（`ValidateDDL` 追加）→ `wasm-build` と進む
+- 05:10 **P3（本命版）1 回目の結果**: `wasmify build` は 8,855 手順を記録（compile 5,472）。`validate-build` に 2 時間 50 分（googlesql 等をネイティブで再コンパイル）。`parse-headers` は 799 関数 / 554 クラス。`gen-proto` は `ValidateDDL` のみ公開（`ParseDDL` は `facade` の到達ヘッダに無かった）。**`wasm-build` は 3,289 手順を skip して 0.3 MB の wasm しか作れず失敗扱い**。原因は `fix_build_json` を `validate-build` の前に実行したこと（その時点では出力が無く、5,716 手順の skip を外せなかった）
+- 05:12 対処 2 点: (1) `facade.h` が `syntax.h` を include し `facade` が `:syntax` に依存するよう修正（1 つの的で `ParseDDL` と `ValidateDDL` の両方を公開）。(2) パイプラインの順序を `validate-build` → `fix_build_json` に直して再実行。`validate-build` はキャッシュが効く見込み。`wasm-build` は直列実行なので、約 5,000 手順で数時間かかる見込み
+- 判断: wasmify の `wasm-build` に並列実行の選択肢は無い（ソース確認）。長時間かかるのは受け入れる
