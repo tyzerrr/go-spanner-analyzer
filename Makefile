@@ -21,8 +21,9 @@ DOCKER = docker run --rm --platform $(PLATFORM) \
 
 arch:     ; $(DOCKER) bash -c 'wasmify save-arch < arch.json'
 classify: ; $(DOCKER) wasmify classify --target $(TARGET)
-build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify generate-build' && python3 tools/fix_build_json.py build.json
-headers:  ; $(DOCKER) bash -c 'wasmify validate-build && wasmify parse-headers'
+build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify generate-build'
+# fix_build_json は validate-build の後（出力が揃った後）にコンテナ内で実行する
+headers:  ; $(DOCKER) bash -c 'wasmify validate-build && python3 tools/fix_build_json.py build.json && wasmify parse-headers'
 bridge:   ; python3 tools/set_bridge.py $(STAGE)
 proto:    ; $(DOCKER) wasmify gen-proto --package $(PACKAGE)
 wasm:     ; $(DOCKER) wasmify wasm-build --optimize --non-interactive --no-cache

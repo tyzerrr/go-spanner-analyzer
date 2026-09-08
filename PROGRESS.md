@@ -109,3 +109,10 @@
 - 08:40 本命 wasm の外部参照 87 個の正体: 大半が **ICU**（`u_toupper_76`、`icu_76::RuleBasedCollator` など）と absl のログ関連。ICU は `rules_foreign_cc`（configure/make）で作られるので wasmify の Bazel 記録に入らず、wasm にリンクされていない。ASCII の DDL 検証には影響しないが、非 ASCII の照合・大文字小文字変換を使う経路では正しく動かない。**課題: ICU を wasm 向けにビルドして `wasm_build.prebuilt_archives` で渡す**（wasmify にその設定がある。googlesql-wasm も同じ問題を通ったはず）
 - 08:01 **wasm2go 版（純 Go、arm64）で `ParseDDL` と `ValidateDDL` のテスト成功。** 変換 7 分 17 秒・最大 13.3 GB（ホスト）。生成物 720 MB / 3,800 万行。テストはビルド込み 21 秒
 - 08:15 本命版（純 Go）のクロスコンパイル:   linux/amd64 OK (57s)   linux/arm64 OK (19s)   windows/amd64 OK (56s) 
+
+## 2026-09-09（朝、起床後）
+
+- 08:25 Makefile の誤りを修正: `fix_build_json` をホスト側で `build` 直後に走らせていた（実行ルートが見えず効かない）。`headers` でコンテナ内、`validate-build` の後に実行するよう変更
+- 08:28 **通し実行を開始**（`make classify STAGE=full → build → headers → bridge → proto → wasm → go-host → go test`）。Makefile と tools/ だけで再現できるかの確認
+- 08:35 ICU の対処に着手。確認: `build.json` に ICU のコンパイル手順は 0 件（`rules_foreign_cc` の configure/make は Bazel の 1 アクションで、per-file の記録に出ない）。ネイティブの `libicuuc.a` 等は x86 なので使えない。ICU 76.1 のソースを `build/icu/src` に複製し、`tools/build_icu_wasm.sh` で「ホスト向けに道具をビルド → `--with-cross-build` で wasm32-wasip1 向けに静的ビルド」を実行中。できた `.a` は `wasm_build.prebuilt_archives` で wasmify に渡す
+- 判断（配布）: wazero 版も cgo 不要の単一バイナリなので、**spnls にはまず wazero 版（wasm 14.8 MB 同梱）を組み込む**。純 Go 版（720 MB）は別モジュールで後から
