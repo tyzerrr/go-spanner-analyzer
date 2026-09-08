@@ -33,3 +33,5 @@
 - 00:45 対処: `tools/fix_build_json.py` で `build.json` からそのフラグを除く（762 手順）。wasmify 側に除去設定は無い（`extra_cxxflags` で足すことしかできない）。Makefile の `build` に組み込み。`wasm-build` を再開（`--memory=5g --cpus=3`、ネイティブビルドと並走）
 - 00:41 P2 検証開始: パッチ適用済みの木で `bazel build //backend/schema/facade:facade //backend/schema/facade:syntax` をネイティブ実行中（wasmify を通さない素の Bazel。`bazel query` で `spanner_pg` が推移的依存に無いことも同時に確認）
 - 判断: wasmify は `-mllvm -wasm-enable-sjlj` を付けている（setjmp/longjmp の wasm 対応）。PostgreSQL を入れない方針は変えないが、将来 PG 方言を足す余地はある
+- 00:48 `wasm-build` 2 回目の失敗: 作業ディレクトリが Bazel の実行ルート（`/root/.cache/bazel/.../execroot/_main`）なので、`wasm-build` のコンテナにも Bazel のボリュームを付ける必要がある。付けて再開（Makefile の `DOCKER` は最初から付けてあるので、手で起動したときだけの見落とし）
+- 00:49 **P2 の第一関門を通過**: `bazel query "deps(//backend/schema/facade:facade)"` で `third_party/spanner_pg` のラベルが 0 件。パッチ 0001 は Bazel の依存解決の上でも PostgreSQL を切り離せている。ネイティブビルド（`facade` と `syntax`）を実行中
