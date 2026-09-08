@@ -59,3 +59,5 @@
 - 02:22 **arm64 の混入の原因を切り分け**: wasm2go の import path をモジュール外（`github.com/tyzerrr/spanneranalyzerwasm2go`）にして再生成すると、`p0/arm64.s` の混入が 0 行になった。モジュール配下のパスを指定したことが引き金。`tools/set_bridge.py` と `tests/go/go.mod.txt`（`replace` 付き）を修正。wasm2go 側には後で報告する
 - 02:24 **第 1 段階（`ParseDDL`）完了。** arm64 ネイティブの純 Go（`CGO_ENABLED=0`）でもテスト成功（実行 0.00 秒、ビルド込み 3.4 秒）。wazero 版・wasm2go 版 amd64・wasm2go 版 arm64 のすべてで動作
 - 02:26 ホストで Go を生成する手順を `tools/gen_go_host.sh` と `make go-host` に道具化（wasmify のプラグインを固定した版でビルドして使う）
+- 02:30 純 Go 版（構文）のクロスコンパイル確認: linux/amd64、linux/arm64、windows/amd64、darwin/amd64 すべて OK（cgo なし、Apple Silicon の Mac 上で）。README の段階 1 を「動作確認済み」に
+- 02:30 P3（本命版）は `validate-build` の途中（googlesql をネイティブで再コンパイル中）。完了後に `parse-headers` → `gen-proto`（`ValidateDDL` 追加）→ `wasm-build` と進む

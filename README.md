@@ -7,7 +7,7 @@ cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と
 
 | 段階 | 公開する関数 | 状態 |
 |---|---|---|
-| 1 | `ParseDDL(ddls []string)` 構文のみ | 作業中 |
+| 1 | `ParseDDL(ddls []string)` 構文のみ | **動作確認済み**（wazero 版、wasm2go 版 amd64/arm64。linux/windows/darwin へクロスコンパイル可） |
 | 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | 作業中 |
 | 3 | `AnalyzeQuery(sql string)` クエリの意味解析 | 未着手 |
 
