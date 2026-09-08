@@ -38,3 +38,6 @@
 - 00:52 `wasm-build` 3 回目の失敗の原因: `build.json` の 1,014/1,356 手順が `wasm_skip`（理由 "transient probe artifact: output deleted by the captured build"）。差分ビルドで作り直されなかった出力を、wasmify が「作られなかった」と誤判定した。wasm は 130 KB しかなく、生成 Go に空スタブが 187 個
 - 00:53 対処: `tools/fix_build_json.py` に「出力が実在する手順の `wasm_skip` を外す」処理を追加（コンテナ内、Bazel の実行ルートが見える場所で実行する必要がある）。`wasm-build --no-cache` を再開
 - 教訓: wasmify の記録は差分ビルドと相性が悪い。`wasmify build` の前に `bazel clean` するか、この道具で直す。Makefile では後者
+- 00:56 修正版の `fix_build_json` が効いた: `unskipped=1014, remaining skip=0/1356`。`wasm-build` が 762 手順の本コンパイルを開始（P1b の本番）
+- 00:47 **P2 ネイティブビルド 1 回目**: 6 分 24 秒、1,124 手順。失敗は 1 箇所だけ。`backend/query/remote_udf/remote_udf_evaluator.cc:67` で `google::spanner::v1::TypeAnnotationCode` が見つからない（`google/spanner/v1/type.pb.h` が消した PostgreSQL のヘッダ経由で間接的に入っていた）。パッチ 0001 の他の 28 ファイルはコンパイルを通過
+- 00:57 対処: 直接 include と `@com_google_googleapis//google/spanner/v1:spanner_cc_proto` の依存を追加（MODIFIED 注記付き）。再ビルド中
