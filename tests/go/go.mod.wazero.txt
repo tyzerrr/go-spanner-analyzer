@@ -1,0 +1,3 @@
+module github.com/tyzerrr/go-spanner-analyzer
+
+go 1.25

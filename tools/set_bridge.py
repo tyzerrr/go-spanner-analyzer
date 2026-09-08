@@ -28,7 +28,10 @@ d["bridge"] = {
         "googlesql_base::StatusOr": "if (!{result}.ok()) { _pw.write_error(std::string({result}.status().message())); }",
     },
     "GoPackage": "github.com/tyzerrr/go-spanner-analyzer;spanneranalyzer",
-    "Wasm2GoImportPath": "github.com/tyzerrr/go-spanner-analyzer/internal/wasm2go",
+    # wasm2go の出力は必ずモジュール外の別パスにする（googlesql-wasm と同じ）。
+    # モジュール配下（.../go-spanner-analyzer/internal/wasm2go）にすると wasm2go v0.5.15 の
+    # arm64 アセンブリにモジュールパスが混入して壊れる（2026-09-09 に実測）。
+    "Wasm2GoImportPath": "github.com/tyzerrr/spanneranalyzerwasm2go",
 }
 # googlesql-wasm が wasi で除外している absl のファイル（ホスト依存）
 d["skip"] = {"files": [

@@ -1,3 +1,8 @@
 module github.com/tyzerrr/go-spanner-analyzer
 
 go 1.25
+
+require github.com/tyzerrr/spanneranalyzerwasm2go v0.0.0
+
+// 開発中は同梱の変換物を使う。公開時は別モジュールとして出す。
+replace github.com/tyzerrr/spanneranalyzerwasm2go => ./internal/wasm2go
