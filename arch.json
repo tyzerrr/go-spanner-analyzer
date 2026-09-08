@@ -1,0 +1,44 @@
+{
+  "project": {
+    "name": "spanner_emulator",
+    "root_dir": "./cloud-spanner-emulator",
+    "language": "c++",
+    "language_standard": "c++20"
+  },
+  "build_system": {
+    "type": "bazel",
+    "version": "7.6.1",
+    "files": ["MODULE.bazel", "BUILD.bazel", ".bazelrc"]
+  },
+  "targets": [
+    {
+      "name": "ddl_parser",
+      "type": "library",
+      "build_target": "//backend/schema/parser:ddl_parser",
+      "source_dirs": ["backend/schema/parser"],
+      "public_headers": ["backend/schema/parser/ddl_parser.h"],
+      "description": "Spanner DDL（GoogleSQL 方言）の構文解析器。JavaCC で生成。PostgreSQL に依存しない最小の的。"
+    },
+    {
+      "name": "schema_updater",
+      "type": "library",
+      "build_target": "//backend/schema/updater:schema_updater",
+      "source_dirs": ["backend/schema/updater"],
+      "public_headers": ["backend/schema/updater/schema_updater.h"],
+      "description": "DDL からスキーマを組み立てて検証する本命。現状は PostgreSQL 実装に依存するのでパッチが要る。"
+    }
+  ],
+  "required_tools": [
+    { "name": "bazel", "installed": true, "version": "7.6.1" },
+    {
+      "name": "java",
+      "installed": true,
+      "detect_cmd": "command -v java",
+      "install": {
+        "darwin": { "commands": ["brew install openjdk"] },
+        "debian": { "commands": ["apt-get update && apt-get install -y default-jdk-headless"] }
+      }
+    }
+  ],
+  "build_commands": { "configure": null, "build": "bazel build -c opt" }
+}
