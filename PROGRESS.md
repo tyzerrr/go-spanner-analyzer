@@ -43,3 +43,4 @@
 - 00:57 対処: 直接 include と `@com_google_googleapis//google/spanner/v1:spanner_cc_proto` の依存を追加（MODIFIED 注記付き）。再ビルド中
 - 01:00 `wasm-build` 4 回目は 48 手順目（`common/errors.cc`）で `googlesql/base/status_macros.h` が見つからず失敗。ヘッダは実在し include 指定も正しい。原因は**競合**: 同時に走らせた本命版の Bazel 再ビルドが、開始時に実行ルートの `external/*` のシンボリックリンクを作り直し、その瞬間に `wasm-build` の include が辿れなくなった（リンクの作成時刻 15:49 と失敗時刻 15:48 が一致）
 - 判断: **Bazel のビルドと `wasm-build` は同じ実行ルートを共有するので同時に動かさない。** 以後は直列。`wasm-build` は本命版の再ビルド完了後に再開する（成功済みの 47 手順はキャッシュを使う）
+- 01:04 P2 再ビルド 2 回目は OOM（`resolved_ast.cc` のコンパイル中に `cc1plus` が Killed）。`wasm-build` と同時実行していたための資源不足。単独で `--memory=18g --jobs=3 --local_resources=memory=12000` で 3 回目を実行中。`remote_udf_evaluator.cc` のエラーは 2 回目のログに出ていない
