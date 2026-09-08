@@ -20,7 +20,7 @@ DOCKER = docker run --rm --platform $(PLATFORM) \
 
 arch:     ; $(DOCKER) bash -c 'wasmify save-arch < arch.json'
 classify: ; $(DOCKER) wasmify classify --target $(TARGET)
-build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify generate-build'
+build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify generate-build' && python3 tools/fix_build_json.py build.json
 headers:  ; $(DOCKER) bash -c 'wasmify validate-build && wasmify parse-headers'
 bridge:   ; python3 tools/set_bridge.py $(STAGE)
 proto:    ; $(DOCKER) wasmify gen-proto --package $(PACKAGE)

@@ -29,3 +29,7 @@
 - 00:22 P1b 開始: `save-arch` → `classify --target facade_syntax` → 記録 → `parse-headers` → bridge（`ParseDDL` のみ公開）→ `gen-proto` → `wasm-build` → `buf generate` を一続きで実行中
 - 00:35 **PostgreSQL 除去パッチの草案完成**（`patches/0001-remove-postgresql-dialect.patch`、29 ファイル、+135/−943）。`tools/bazel_deps_walk.py` で `schema_updater` から `spanner_pg` への到達 0 件を確認。私が見積もった 5 ファイルより広く、`transaction` `actions` `query/ml` `query/search` `query/remote_udf` `schema/printer` `information_schema_catalog` も推移的に到達していた。机上確認: 変更ファイルに PG の識別子は残っていない（コメントと `"PG_CATALOG"` 文字列を除く）。**未コンパイル**。P1b 完了後に `//backend/schema/facade:facade` のネイティブビルドで検証する
 - 00:36 ファサードを `patches/0002-add-facade.patch` として切り出し。`patches/README.md` を追加
+- 00:39 P1b: `parse-headers` 成功（668 関数 / 243 クラス / 79 enum の品書き）、`gen-proto` 成功（`ParseDDL` 1 本、`ValidationError`）。`wasm-build` は `-fno-canonical-system-headers`（GCC 専用、Bazel の gcc ツールチェーンが付与）を wasi clang が拒否して失敗
+- 00:45 対処: `tools/fix_build_json.py` で `build.json` からそのフラグを除く（762 手順）。wasmify 側に除去設定は無い（`extra_cxxflags` で足すことしかできない）。Makefile の `build` に組み込み。`wasm-build` を再開（`--memory=5g --cpus=3`、ネイティブビルドと並走）
+- 00:41 P2 検証開始: パッチ適用済みの木で `bazel build //backend/schema/facade:facade //backend/schema/facade:syntax` をネイティブ実行中（wasmify を通さない素の Bazel。`bazel query` で `spanner_pg` が推移的依存に無いことも同時に確認）
+- 判断: wasmify は `-mllvm -wasm-enable-sjlj` を付けている（setjmp/longjmp の wasm 対応）。PostgreSQL を入れない方針は変えないが、将来 PG 方言を足す余地はある
