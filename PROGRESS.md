@@ -76,3 +76,6 @@
 - 08:00 `net/if.h` の stub は効いた。次は 1,799 手順目 `googlesql/base/net/public_suffix_oss.cc`（NET.REG_DOMAIN 等）が libc++ で型変換エラー。外部の NET 関数実装で DDL 検証に不要
 - 08:02 `wasm-build` を「外部ソースで失敗したら `skip.files` に加えて再開、first-party で失敗したら停止」のループで実行中（キャッシュにより 1 周は短い）
 - 08:20 **本命版（`ValidateDDL`）の wasm が完成。** `spanner_emulator.wasm` 14.8 MB（wasm-opt 前 20.4 MB）。1,823 手順（compile 1,261、archive 556、skip 6、cache 1,441）、526 archive をリンク。自動除外ループは 2 周で成功（追加除外は `public_suffix_oss.cc` の 1 件）。`build/full/` に退避
+- 08:30 **`ValidateDDL` が Go の中で動いた（wazero 版）。** 5 種の意味エラー（`Table not found: NoSuchTable` / `Column Y.A has type ARRAY, but is part of the primary key.` / `Table Z references nonexistent key column NoSuchCol.` / `Index Bad specifies key column NoSuchColumn which does not exist in the index's base table.` / `Duplicate name in schema: Singers.`）を本物のエミュレータと同じ文言で検出。正しい 3 文は通過。`ParseDDL` も同じバイナリで動作。テスト全体 1.2 秒（`ValidateDDL` 6 回で 0.04 秒）
+- 08:31 wasm2go 版の生成は `tools/gen_go_host.sh` の不具合（buf の `--template` に拡張子無しの一時ファイルを渡すとインライン JSON と解釈される）で 1 回失敗。修正して再実行中
+- 注記: 本命版 wasm の外部参照（env import）は 87 個。ほとんどが absl のログ関連（`skip.files` で外した `log/internal/globals.cc` 等）だが、`googlesql::GetDefaultErrorMessageStability` など googlesql の関数も含まれる。`facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）。テストは通っているが、後で依存を足して 0 に近づける

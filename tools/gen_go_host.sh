@@ -19,7 +19,7 @@ if [ ! -x "$BIN/protoc-gen-wasmify-go" ]; then
 fi
 WASM_ABS=$(cd "$(dirname "$WASM")" && pwd)/$(basename "$WASM")
 OUT_ABS=$(mkdir -p "$OUT" && cd "$OUT" && pwd)
-TEMPLATE=$(mktemp)
+TEMPLATE=$PROTO_DIR/buf.gen.wasm2go.yaml   # 拡張子が無いと buf がインライン JSON と解釈して失敗する
 cat > "$TEMPLATE" <<YAML
 version: v2
 inputs:
@@ -33,7 +33,7 @@ plugins:
       - wasm=$WASM_ABS
 YAML
 echo "==> buf generate (wasm2go) -> $OUT_ABS"
-( cd "$PROTO_DIR" && PATH="$BIN:$PATH" buf generate --template "$TEMPLATE" )
+( cd "$PROTO_DIR" && PATH="$BIN:$PATH" buf generate --template buf.gen.wasm2go.yaml )
 rm -f "$TEMPLATE"
 # Go モジュールとして動く形に整える（開発用の replace 付き）
 cp "$ROOT/tests/go/go.mod.txt" "$OUT_ABS/go.mod"

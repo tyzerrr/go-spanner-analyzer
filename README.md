@@ -8,7 +8,7 @@ cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と
 | 段階 | 公開する関数 | 状態 |
 |---|---|---|
 | 1 | `ParseDDL(ddls []string)` 構文のみ | **動作確認済み**（wazero 版、wasm2go 版 amd64/arm64。linux/windows/darwin へクロスコンパイル可） |
-| 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | 作業中 |
+| 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | **動作確認済み**（wazero 版。親テーブル無し・主キーに ARRAY・主キーに無い列・索引に無い列・重複を本物と同じ文言で検出） |
 | 3 | `AnalyzeQuery(sql string)` クエリの意味解析 | 未着手 |
 
 Day1 は GoogleSQL 方言のみ。PostgreSQL 方言はビルドから外している（`patches/`）。
