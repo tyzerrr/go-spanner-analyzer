@@ -1,0 +1,21 @@
+go-spanner-analyzer
+Copyright 2026 Taichi Araki
+
+This product includes software developed by Google LLC and released under the
+Apache License, Version 2.0:
+
+  - Cloud Spanner Emulator  https://github.com/GoogleCloudPlatform/cloud-spanner-emulator
+    (used as a git submodule, with local modifications recorded in patches/;
+     modified files carry a "MODIFIED by go-spanner-analyzer" notice)
+  - GoogleSQL (formerly ZetaSQL)  https://github.com/google/googlesql
+    (built as a dependency of the emulator)
+
+The generated Go code under build/ is a derivative work of the above and is
+distributed under the Apache License, Version 2.0. Third-party notices for
+everything compiled into the artifact are kept in THIRD_PARTY_NOTICES.txt.
+
+Tooling used to produce the artifact (not distributed with it):
+  - wasmify, wasm2go, protoc-gen-wasmify-go by Masaaki Goshima (MIT)
+
+"Spanner" is a trademark of Google LLC. This project is an independent
+open-source effort and is not affiliated with or endorsed by Google.
