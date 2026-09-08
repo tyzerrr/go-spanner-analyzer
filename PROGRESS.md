@@ -22,7 +22,7 @@
 - **ICU が wasm にリンクされていない**（外部参照 87 個の大半）。`rules_foreign_cc` 製のため記録に入らない。ASCII の DDL には影響しないが、要対処（`wasm_build.prebuilt_archives`）
 - 公開の形: 生成物（720 MB）をどう配布するか。googlesql-wasm 同様、変換物は別モジュール `github.com/tyzerrr/spanneranalyzerwasm2go` として出す前提で `replace` を使っている
 - `facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）
-- wasm2go の arm64 不具合（モジュール配下の import path で壊れる）は上流に報告する
+- wasm2go の arm64 不具合（**import path にハイフンがあると壊れる**。当初「モジュール配下だから」と考えたのは誤りで、玩具で切り分けて訂正）は上流に報告する（`docs/wasm2go-arm64-hyphen.md`）
 - 手順の再現性: 今回は手作業が多かった。`Makefile` と `tools/` に集約したが、通しで再実行して確かめる
 
 再現の最短経路（ホスト）: `make classify STAGE=full && make build && make headers` の後に `python3 tools/fix_build_json.py`（コンテナ内、`validate-build` 後）→ `make bridge STAGE=full proto wasm` → `make go-host` → `build/wasm2go-host` で `go test`
@@ -116,3 +116,4 @@
 - 08:28 **通し実行を開始**（`make classify STAGE=full → build → headers → bridge → proto → wasm → go-host → go test`）。Makefile と tools/ だけで再現できるかの確認
 - 08:35 ICU の対処に着手。確認: `build.json` に ICU のコンパイル手順は 0 件（`rules_foreign_cc` の configure/make は Bazel の 1 アクションで、per-file の記録に出ない）。ネイティブの `libicuuc.a` 等は x86 なので使えない。ICU 76.1 のソースを `build/icu/src` に複製し、`tools/build_icu_wasm.sh` で「ホスト向けに道具をビルド → `--with-cross-build` で wasm32-wasip1 向けに静的ビルド」を実行中。できた `.a` は `wasm_build.prebuilt_archives` で wasmify に渡す
 - 判断（配布）: wazero 版も cgo 不要の単一バイナリなので、**spnls にはまず wazero 版（wasm 14.8 MB 同梱）を組み込む**。純 Go 版（720 MB）は別モジュールで後から
+- 08:50 **wasm2go の不具合の原因を訂正**: 玩具で 4 通り試した結果、arm64 アセンブリが壊れるのは **import path にハイフンが含まれるとき**（3 万行混入）。モジュール配下かどうかは無関係（ハイフン無しなら配下でも 0 行）。amd64 は常に無傷。`go-spanner-analyzer` にハイフンがあるため配下に置くと踏んだ、が正しい説明。再現手順を `docs/wasm2go-arm64-hyphen.md` に記録
