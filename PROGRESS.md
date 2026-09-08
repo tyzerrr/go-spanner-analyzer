@@ -66,3 +66,6 @@
 - 判断: wasmify の `wasm-build` に並列実行の選択肢は無い（ソース確認）。長時間かかるのは受け入れる
 - 06:20 **P3 再実行**: `validate-build` は全 8,860 手順がキャッシュ命中（1 秒）。`fix_build_json` で 5,818 手順の skip を解除（残り 4）。`gen-proto` は `ParseDDL` と `ValidateDDL` の 2 本を公開。`wasm-build` は 61 分走って 817 手順目の `backend/query/remote_udf/remote_udf_evaluator.cc` で停止: `httplib.h` 経由で `<net/if.h>` が要る（wasi に無い）。遠隔 UDF の HTTP 呼び出し用で、DDL 検証には不要
 - 06:22 対処: ネットワーク系ヘッダを含む first-party ソースを洗い出して `skip.files` に入れ（`wasmify.json` と `tools/set_bridge.py` の両方）、`wasm-build` を再開。816 手順分はキャッシュされているので、続きから進む
+- 06:35 `wasm-build` 再開は 892 手順目 `change_stream.grpc.pb.cc` で停止（gRPC の `port_platform.h` が wasm を判別できない）。調べると**残り約 5,470 手順のうち約 3,700 が gRPC 一式**（grpc core 1,332、boringssl 806、envoy_api 692、google_cloud_cpp 300、c-ares 182、xds 182、upb 106）。first-party のコードは gRPC をほぼ使っておらず（`common/config` の関数名のみ）、BUILD の `deps` に `@com_github_grpc_grpc//:grpc++` が約 90 箇所書かれていただけ
+- 06:40 対処: `backend/` と `common/` の BUILD から `grpc++` の依存を機械的に削除、`spanner_cc_grpc` → `spanner_cc_proto` に置換（MODIFIED 注記付き）。ネイティブ再ビルドと `bazel query` で確認中。google-cloud-cpp の `bytes.h` を include する 2 ファイル（`transaction/actions.cc`、`actions/change_stream.cc`）は実際には `absl::Base64Escape` を使っていて include が死んでいるので、次に外す
+- 見込み: gRPC 一式を外せば wasm のコンパイル対象は約 1,800 手順に減り、`wasm-build` の所要時間も 1 時間台に収まる
