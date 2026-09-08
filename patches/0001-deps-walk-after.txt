@@ -1,0 +1,3 @@
+start: //backend/schema/updater:schema_updater
+visited in-repo targets: 130
+forbidden (//third_party/spanner_pg) labels reached: 0

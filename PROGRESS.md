@@ -27,3 +27,5 @@
 - 00:10 PostgreSQL 除去パッチの草案を補助エージェントに依頼（対象: schema_updater / validators / datamodel:types / query:catalog / query:function_catalog と各 BUILD。成果物は `patches/0001-remove-postgresql-dialect.patch`）
 - 00:21 **P1a 成功**。`ddl_parser` のネイティブビルドを 16 分で記録（1,351 手順: compile 760 / link 197 / archive 394、コンパイラは gcc）。JavaCC の生成物（`DDLParser.cc` `ParseException.cc` `DDLParserTokenManager.cc`）が JDK 経由で作られてコンパイルされた。Bazel・JDK・JavaCC はコンテナ内で動く
 - 00:22 P1b 開始: `save-arch` → `classify --target facade_syntax` → 記録 → `parse-headers` → bridge（`ParseDDL` のみ公開）→ `gen-proto` → `wasm-build` → `buf generate` を一続きで実行中
+- 00:35 **PostgreSQL 除去パッチの草案完成**（`patches/0001-remove-postgresql-dialect.patch`、29 ファイル、+135/−943）。`tools/bazel_deps_walk.py` で `schema_updater` から `spanner_pg` への到達 0 件を確認。私が見積もった 5 ファイルより広く、`transaction` `actions` `query/ml` `query/search` `query/remote_udf` `schema/printer` `information_schema_catalog` も推移的に到達していた。机上確認: 変更ファイルに PG の識別子は残っていない（コメントと `"PG_CATALOG"` 文字列を除く）。**未コンパイル**。P1b 完了後に `//backend/schema/facade:facade` のネイティブビルドで検証する
+- 00:36 ファサードを `patches/0002-add-facade.patch` として切り出し。`patches/README.md` を追加

@@ -1,0 +1,2061 @@
+diff --git a/backend/actions/BUILD b/backend/actions/BUILD
+index 21e9377..929b9d7 100644
+--- a/backend/actions/BUILD
++++ b/backend/actions/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -240,7 +242,6 @@ cc_library(
+         "//common:constants",
+         "//common:errors",
+         "//common:limits",
+-        "//third_party/spanner_pg/datatypes/extended:spanner_extended_type",
+         "@com_github_googleapis_google_cloud_cpp//:spanner",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+diff --git a/backend/actions/change_stream.cc b/backend/actions/change_stream.cc
+index 37c4dd7..0ff6686 100644
+--- a/backend/actions/change_stream.cc
++++ b/backend/actions/change_stream.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/actions/change_stream.h"
+ 
+ #include <algorithm>
+@@ -59,7 +61,6 @@
+ #include "googlesql/base/status_macros.h"
+ #include "nlohmann/json_fwd.hpp"
+ #include "nlohmann/json.hpp"
+-#include "third_party/spanner_pg/datatypes/extended/spanner_extended_type.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -68,7 +69,6 @@ namespace backend {
+ using ::googlesql::JSONValueRef;
+ using JSON = ::nlohmann::json;
+ using ::google::spanner::v1::TypeAnnotationCode;
+-using ::postgres_translator::spangres::datatypes::SpannerExtendedType;
+ static constexpr absl::string_view kInsert = "INSERT";
+ static constexpr absl::string_view kUpdate = "UPDATE";
+ static constexpr absl::string_view kDelete = "DELETE";
+@@ -514,21 +514,7 @@ std::string GsqlTypeToSpannerType(const googlesql::Type* type) {
+   std::string element_type_code;
+   const googlesql::Type* element_type =
+       type->IsArray() ? type->AsArray()->element_type() : type;
+-  if (element_type->kind() == googlesql::TYPE_EXTENDED) {
+-    std::string element_annotation_code;
+-    auto type_code =
+-        static_cast<const SpannerExtendedType*>(element_type)->code();
+-    if (type_code == TypeAnnotationCode::PG_JSONB) {
+-      element_type_code = "JSON";
+-      element_annotation_code = "PG_JSONB";
+-    } else if (type_code == TypeAnnotationCode::PG_NUMERIC) {
+-      element_type_code = "NUMERIC";
+-      element_annotation_code = "PG_NUMERIC";
+-    }
+-    type->IsArray() ? type_json["array_element_type"]["type_annotation"] =
+-                          element_annotation_code
+-                    : type_json["type_annotation"] = element_annotation_code;
+-  } else if (element_type->kind() == googlesql::TYPE_PROTO) {
++  if (element_type->kind() == googlesql::TYPE_PROTO) {
+     element_type_code = "PROTO";
+   } else {
+     element_type_code = element_type->TypeName(googlesql::PRODUCT_EXTERNAL,
+diff --git a/backend/datamodel/BUILD b/backend/datamodel/BUILD
+index 8c40411..88553e3 100644
+--- a/backend/datamodel/BUILD
++++ b/backend/datamodel/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -108,7 +110,6 @@ cc_library(
+     hdrs = ["types.h"],
+     deps = [
+         "//common:feature_flags",
+-        "//third_party/spanner_pg/datatypes/extended:spanner_extended_type",
+         "@com_google_googleapis//google/spanner/v1:spanner_cc_proto",
+         "@com_google_googlesql//googlesql/public:options_cc_proto",
+         "@com_google_googlesql//googlesql/public:type",
+diff --git a/backend/datamodel/types.cc b/backend/datamodel/types.cc
+index 9589f5e..d2aa8fd 100644
+--- a/backend/datamodel/types.cc
++++ b/backend/datamodel/types.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/datamodel/types.h"
+ 
+ #include <string>
+@@ -23,15 +25,12 @@
+ #include "googlesql/public/type.pb.h"
+ #include "googlesql/public/types/type.h"
+ #include "common/feature_flags.h"
+-#include "third_party/spanner_pg/datatypes/extended/spanner_extended_type.h"
+ 
+ namespace google {
+ namespace spanner {
+ namespace emulator {
+ namespace backend {
+ 
+-using ::google::spanner::v1::TypeAnnotationCode;
+-using ::postgres_translator::spangres::datatypes::SpannerExtendedType;
+ 
+ bool IsSupportedColumnType(const googlesql::Type* type) {
+   // According to https://cloud.google.com/spanner/docs/data-types
+@@ -62,16 +61,9 @@ bool IsSupportedColumnType(const googlesql::Type* type) {
+     case googlesql::TypeKind::TYPE_ENUM: {
+       return EmulatorFeatureFlags::instance().flags().enable_protos;
+     }
+-    case googlesql::TypeKind::TYPE_EXTENDED: {
+-      auto type_code = static_cast<const SpannerExtendedType*>(type)->code();
+-      switch (type_code) {
+-        case TypeAnnotationCode::PG_JSONB:
+-        case TypeAnnotationCode::PG_NUMERIC:
+-          return true;
+-        default:
+-          return false;
+-      }
+-    }
++    // Extended types (PG.NUMERIC, PG.JSONB) are unavailable in this build.
++    case googlesql::TypeKind::TYPE_EXTENDED:
++      return false;
+     // INTERVAL is a query only type.
+     case googlesql::TypeKind::TYPE_INTERVAL:
+       return false;
+@@ -95,11 +87,7 @@ bool IsSupportedKeyColumnType(const googlesql::Type* type,
+   // and
+   // https://cloud.google.com/spanner/docs/working-with-numerics#postgresql-numeric
+   if (type->IsExtendedType()) {
+-    auto type_code = static_cast<const SpannerExtendedType*>(type)->code();
+-    if (type_code == TypeAnnotationCode::PG_NUMERIC ||
+-        type_code == TypeAnnotationCode::PG_JSONB) {
+-      return false;
+-    }
++    return false;
+   }
+   if (type->IsTokenList()) {
+     return false;
+diff --git a/backend/query/BUILD b/backend/query/BUILD
+index 4c5122a..d3f6e7c 100644
+--- a/backend/query/BUILD
++++ b/backend/query/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+@@ -452,7 +454,6 @@ cc_library(
+     ],
+     deps = [
+         ":info_schema_columns_metadata_values",
+-        "//third_party/spanner_pg/datatypes/extended:pg_oid_type",
+         "@com_google_absl//absl/base:no_destructor",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+@@ -494,9 +495,6 @@ cc_library(
+         "//backend/schema/parser:ddl_parser",
+         "//backend/schema/printer:print_ddl",
+         "//backend/schema/updater:ddl_type_conversion",
+-        "//third_party/spanner_pg/catalog:spangres_type",
+-        "//third_party/spanner_pg/ddl:spangres_direct_schema_printer_impl",
+-        "//third_party/spanner_pg/ddl:spangres_schema_printer",
+         "@com_google_absl//absl/base:no_destructor",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+@@ -569,7 +567,6 @@ cc_library(
+         ":analyzer_options",
+         ":function_catalog",
+         ":information_schema_catalog",
+-        ":pg_catalog",
+         ":queryable_model",
+         ":queryable_named_schema",
+         ":queryable_property_graph",
+@@ -584,10 +581,6 @@ cc_library(
+         "//backend/schema/catalog:schema",
+         "//common:constants",
+         "//common:errors",
+-        "//third_party/spanner_pg/datatypes/extended:conversion_finder",
+-        "//third_party/spanner_pg/datatypes/extended:pg_jsonb_type",
+-        "//third_party/spanner_pg/datatypes/extended:pg_numeric_type",
+-        "//third_party/spanner_pg/datatypes/extended:pg_oid_type",
+         "@com_google_absl//absl/base:core_headers",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+@@ -827,11 +820,6 @@ cc_library(
+         "//common:errors",
+         "//common:feature_flags",
+         "//common:pg_literals",
+-        "//third_party/spanner_pg/catalog:emulator_function_evaluators",
+-        "//third_party/spanner_pg/catalog:emulator_functions",
+-        "//third_party/spanner_pg/datatypes/extended:pg_jsonb_type",
+-        "//third_party/spanner_pg/datatypes/extended:pg_numeric_type",
+-        "//third_party/spanner_pg/interface:pg_evaluators",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+         "@com_google_absl//absl/log",
+diff --git a/backend/query/catalog.cc b/backend/query/catalog.cc
+index 0bd1266..68a5d65 100644
+--- a/backend/query/catalog.cc
++++ b/backend/query/catalog.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/catalog.h"
+ 
+ #include <memory>
+@@ -45,7 +47,6 @@
+ #include "backend/query/change_stream/queryable_change_stream_tvf.h"
+ #include "backend/query/function_catalog.h"
+ #include "backend/query/information_schema_catalog.h"
+-#include "backend/query/pg_catalog.h"
+ #include "backend/query/queryable_model.h"
+ #include "backend/query/queryable_named_schema.h"
+ #include "backend/query/queryable_property_graph.h"
+@@ -60,10 +61,6 @@
+ #include "common/errors.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/datatypes/extended/conversion_finder.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_jsonb_type.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_numeric_type.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_oid_type.h"
+ #include "google/protobuf/descriptor.h"
+ 
+ namespace google {
+@@ -71,10 +68,6 @@ namespace spanner {
+ namespace emulator {
+ namespace backend {
+ 
+-using postgres_translator::spangres::datatypes::GetPgJsonbType;
+-using postgres_translator::spangres::datatypes::GetPgNumericType;
+-using postgres_translator::spangres::datatypes::GetPgOidType;
+-
+ // A sub-catalog used for resolving NET function lookups.
+ class NetCatalog : public googlesql::Catalog {
+  public:
+@@ -147,9 +140,6 @@ class PGFunctionCatalog : public googlesql::Catalog {
+       : root_catalog_(root_catalog) {}
+ 
+   static constexpr char kName[] = "PG";
+-  static constexpr char kPgNumericTypeName[] = "PG.NUMERIC";
+-  static constexpr char kPgJsonbTypeName[] = "PG.JSONB";
+-  static constexpr char kPgOidTypeName[] = "PG.OID";
+ 
+   std::string FullName() const final {
+     std::string name = root_catalog_->FullName();
+@@ -177,20 +167,8 @@ class PGFunctionCatalog : public googlesql::Catalog {
+   absl::Status GetType(const std::string& name, const googlesql::Type** type,
+                        const FindOptions& options) final {
+     std::string full_name = absl::StrJoin({FullName(), name}, ".");
+-    if (root_catalog_->schema_ != nullptr &&
+-        root_catalog_->schema_->dialect() ==
+-            database_api::DatabaseDialect::POSTGRESQL) {
+-      if (absl::EqualsIgnoreCase(full_name, kPgNumericTypeName)) {
+-        *type = GetPgNumericType();
+-        return absl::OkStatus();
+-      } else if (absl::EqualsIgnoreCase(full_name, kPgJsonbTypeName)) {
+-        *type = GetPgJsonbType();
+-        return absl::OkStatus();
+-      } else if (absl::EqualsIgnoreCase(full_name, kPgOidTypeName)) {
+-        *type = GetPgOidType();
+-        return absl::OkStatus();
+-      }
+-    }
++    // PG.NUMERIC / PG.JSONB / PG.OID extended types are unavailable in this
++    // build.
+     return root_catalog_->GetType(full_name, type, options);
+   }
+ 
+@@ -412,9 +390,6 @@ absl::Status Catalog::GetCatalog(const std::string& name,
+     *catalog = GetAiFunctionsCatalog();
+   } else if (absl::EqualsIgnoreCase(name, PGFunctionCatalog::kName)) {
+     *catalog = GetPGFunctionsCatalog();
+-  } else if (absl::EqualsIgnoreCase(name,
+-                                    postgres_translator::PGCatalog::kName)) {
+-    *catalog = GetPGCatalog();
+   } else {
+     if (QueryableNamedSchema* named_schema = GetNamedSchema(name);
+         named_schema) {
+@@ -456,11 +431,12 @@ absl::Status Catalog::FindConversion(
+     const googlesql::Type* from_type, const googlesql::Type* to_type,
+     const googlesql::Catalog::FindConversionOptions& options,
+     googlesql::Conversion* conversion) {
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      *conversion,
+-      postgres_translator::spangres::datatypes::FindExtendedTypeConversion(
+-          from_type, to_type, options));
+-  return absl::OkStatus();
++  // Extended type (PG.*) conversions are unavailable in this build; mirror the
++  // "not found" result FindExtendedTypeConversion returns for other types.
++  return absl::NotFoundError(absl::StrCat(
++      options.is_explicit() ? "Cast" : "Coercion", " from type ",
++      from_type->DebugString(), " to type ", to_type->DebugString(),
++      " not found in catalog."));
+ }
+ 
+ absl::Status Catalog::GetPropertyGraph(std::string_view name,
+@@ -666,18 +642,6 @@ googlesql::Catalog* Catalog::GetPGFunctionsCatalog() const {
+   return pg_function_catalog_.get();
+ }
+ 
+-googlesql::Catalog* Catalog::GetPGCatalog() const {
+-  absl::MutexLock lock(mu_);
+-  if (schema_->dialect() == database_api::DatabaseDialect::POSTGRESQL) {
+-    if (!pg_catalog_) {
+-      pg_catalog_ =
+-          std::make_unique<postgres_translator::PGCatalog>(this, schema_);
+-    }
+-    return pg_catalog_.get();
+-  }
+-  return nullptr;
+-}
+-
+ QueryableNamedSchema* Catalog::GetNamedSchema(const std::string& name) {
+   if (auto it = named_schemas_.find(name); it != named_schemas_.end()) {
+     return it->second.get();
+diff --git a/backend/query/catalog.h b/backend/query/catalog.h
+index 7b70f15..fc28c62 100644
+--- a/backend/query/catalog.h
++++ b/backend/query/catalog.h
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #ifndef THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_CATALOG_H_
+ #define THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_CATALOG_H_
+ 
+@@ -160,9 +162,6 @@ class Catalog : public googlesql::EnumerableCatalog {
+   // Returns the PG functions catalog.
+   googlesql::Catalog* GetPGFunctionsCatalog() const ABSL_LOCKS_EXCLUDED(mu_);
+ 
+-  // Returns the PG catalog (similar to information_schema).
+-  googlesql::Catalog* GetPGCatalog() const ABSL_LOCKS_EXCLUDED(mu_);
+-
+   QueryableNamedSchema* GetNamedSchema(const std::string& name);
+ 
+   // Returns all named schemas
+@@ -234,9 +233,6 @@ class Catalog : public googlesql::EnumerableCatalog {
+   mutable std::unique_ptr<googlesql::Catalog> pg_function_catalog_
+       ABSL_GUARDED_BY(mu_);
+ 
+-  // Sub-catalog for resolving pg_catalog lookup.
+-  mutable std::unique_ptr<googlesql::Catalog> pg_catalog_ ABSL_GUARDED_BY(mu_);
+-
+   // System Procedures available.
+   CaseInsensitiveStringMap<std::unique_ptr<googlesql::Procedure>> procedures_;
+ 
+diff --git a/backend/query/change_stream/BUILD b/backend/query/change_stream/BUILD
+index fe0f29e..51ca015 100644
+--- a/backend/query/change_stream/BUILD
++++ b/backend/query/change_stream/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -33,8 +35,6 @@ cc_library(
+     ],
+     deps = [
+         "//common:constants",
+-        "//third_party/spanner_pg/catalog:spangres_type",
+-        "//third_party/spanner_pg/catalog:type",
+         "@com_google_absl//absl/strings",
+         "@com_google_googleapis//google/spanner/v1:spanner_cc_grpc",
+         "@com_google_googlesql//googlesql/base:status",
+diff --git a/backend/query/change_stream/queryable_change_stream_tvf.cc b/backend/query/change_stream/queryable_change_stream_tvf.cc
+index 3a77b73..85d2836 100644
+--- a/backend/query/change_stream/queryable_change_stream_tvf.cc
++++ b/backend/query/change_stream/queryable_change_stream_tvf.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/change_stream/queryable_change_stream_tvf.h"
+ 
+ #include <memory>
+@@ -30,8 +32,6 @@
+ #include "absl/strings/substitute.h"
+ #include "common/constants.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/catalog/spangres_type.h"
+-#include "third_party/spanner_pg/catalog/type.h"
+ #include "google/protobuf/descriptor.h"
+ 
+ namespace google {
+@@ -49,12 +49,8 @@ QueryableChangeStreamTvf::Create(const std::string& tvf_name,
+   std::vector<std::pair<std::string, const googlesql::Type*>> columns;
+   const googlesql::Type* output_type = nullptr;
+   if (is_pg) {
+-    if (is_mutable_key_range) {
+-      output_type = postgres_translator::types::PgByteaMapping()->mapped_type();
+-    } else {
+-      output_type =
+-          postgres_translator::spangres::types::PgJsonbMapping()->mapped_type();
+-    }
++    return absl::UnimplementedError(
++        "PostgreSQL dialect is not supported in this build");
+   } else {
+     if (is_mutable_key_range) {
+       const google::protobuf::Descriptor* descriptor =
+diff --git a/backend/query/function_catalog.cc b/backend/query/function_catalog.cc
+index 10d9c56..c162257 100644
+--- a/backend/query/function_catalog.cc
++++ b/backend/query/function_catalog.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/function_catalog.h"
+ 
+ #include <memory>
+@@ -50,7 +52,6 @@
+ #include "backend/common/case.h"
+ #include "backend/query/analyzer_options.h"
+ #include "backend/query/graph/mock_graph_algo_table_valued_function.h"
+-#include "backend/query/ml/ml_predict_row_function.h"
+ #include "backend/query/ml/ml_predict_table_valued_function.h"
+ #include "backend/query/ml/model_evaluator.h"
+ #include "backend/query/search/search_function_catalog.h"
+@@ -58,7 +59,6 @@
+ #include "backend/schema/catalog/table.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_jsonb_type.h"
+ #include "backend/schema/catalog/schema.h"
+ #include "backend/schema/catalog/sequence.h"
+ #include "common/bit_reverse.h"
+@@ -66,12 +66,6 @@
+ #include "common/errors.h"
+ #include "common/feature_flags.h"
+ #include "common/pg_literals.h"
+-#include "third_party/spanner_pg/catalog/emulator_function_evaluators.h"
+-#include "third_party/spanner_pg/catalog/emulator_functions.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_numeric_type.h"
+-#include "third_party/spanner_pg/interface/datetime_evaluators.h"
+-#include "third_party/spanner_pg/interface/formatting_evaluators.h"
+-#include "third_party/spanner_pg/interface/pg_timezone.h"
+ #include "googlesql/base/ret_check.h"
+ 
+ namespace google {
+@@ -80,14 +74,6 @@ namespace emulator {
+ namespace backend {
+ 
+ namespace {
+-using postgres_translator::GetSpannerPGFunctions;
+-using postgres_translator::GetSpannerPGTVFs;
+-using postgres_translator::SpannerPGFunctions;
+-using postgres_translator::SpannerPGTVFs;
+-
+-using postgres_translator::function_evaluators::CleanupPostgresDateTimeCache;
+-using postgres_translator::function_evaluators::CleanupPostgresNumberCache;
+-
+ const googlesql::Type* gsql_float = googlesql::types::FloatType();
+ const googlesql::Type* gsql_double = googlesql::types::DoubleType();
+ const googlesql::Type* gsql_int64 = googlesql::types::Int64Type();
+@@ -334,52 +320,6 @@ absl::StatusOr<googlesql::Value> EvalAiClassify(
+                          << category.type()->DebugString();
+       }
+     }
+-  } else if (args[1].type()->Equals(
+-                 postgres_translator::spangres::datatypes::GetPgJsonbType())) {
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        absl::Cord categories_cord,
+-        postgres_translator::spangres::datatypes::GetPgJsonbNormalizedValue(
+-            args[1]));
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        googlesql::JSONValue categories_json,
+-        googlesql::JSONValue::ParseJSONString(categories_cord.Flatten()));
+-
+-    if (!categories_json.GetConstRef().IsArray()) {
+-      return error::AiClassify_Categories_NotArray();
+-    }
+-
+-    if (categories_json.GetConstRef().GetArraySize() == 0) {
+-      return error::AiClassify_Categories_EmptyArray();
+-    }
+-    bool first = true;
+-    for (const auto& category :
+-         categories_json.GetConstRef().GetArrayElements()) {
+-      absl::StrAppend(&formatted_categories, first ? "" : ", ");
+-      first = false;
+-
+-      if (!category.IsObject() || category.GetObjectSize() != 2) {
+-        return error::AiClassify_Categories_NotArrayOfObjects();
+-      }
+-      std::optional<googlesql::JSONValueConstRef> label =
+-          category.GetMemberIfExists("label");
+-      std::optional<googlesql::JSONValueConstRef> description =
+-          category.GetMemberIfExists("description");
+-      if (!label.has_value() || !label->IsString() ||
+-          !description.has_value() || !description->IsString()) {
+-        return error::AiClassify_Categories_InvalidObject();
+-      }
+-      if (label->GetString().empty()) {
+-        return error::AiClassify_Categories_EmptyLabel();
+-      }
+-      if (description->GetString().empty()) {
+-        return error::AiClassify_Categories_EmptyDescription();
+-      }
+-
+-      absl::StrAppend(&formatted_categories, label->GetString(), " (",
+-                      description->GetString(), ")");
+-      categories.push_back(label->GetString());
+-    }
+-
+   } else {
+     GOOGLESQL_RET_CHECK_FAIL() << "Unsupported categories type: "
+                      << args[1].type()->DebugString();
+@@ -471,44 +411,11 @@ std::unique_ptr<googlesql::Function> AiClassifyFunction(
+              googlesql::FunctionArgumentTypeOptions().set_argument_name(
+                  "categories", googlesql::kPositionalOrNamed)}},
+            nullptr},
+-          {googlesql::types::StringType(),
+-           {{googlesql::types::StringType(),
+-             googlesql::FunctionArgumentTypeOptions().set_argument_name(
+-                 "prompt", googlesql::kPositionalOrNamed)},
+-            {postgres_translator::spangres::datatypes::GetPgJsonbType(),
+-             googlesql::FunctionArgumentTypeOptions().set_argument_name(
+-                 "categories", googlesql::kPositionalOrNamed)}},
+-           nullptr},
+       },
+       function_options);
+ }
+ 
+-std::unique_ptr<googlesql::Function> MlPredictRowFunction(
+-    const std::string& catalog_name) {
+-  auto pg_jsonb = postgres_translator::spangres::datatypes::GetPgJsonbType();
+-  auto gsql_string = googlesql::types::StringType();
+-
+-  googlesql::FunctionArgumentTypeOptions model_endpoint_opt;
+-  model_endpoint_opt.set_argument_name(kMlPredictRowParamModelEndpoint,
+-                                       googlesql::kPositionalOrNamed);
+-
+-  googlesql::FunctionArgumentTypeOptions arg_opt;
+-  arg_opt.set_argument_name(kMlPredictRowParamArgs,
+-                            googlesql::kPositionalOrNamed);
+-
+-  return std::make_unique<googlesql::Function>(
+-      kMlPredictRowFunctionName, catalog_name, googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{
+-              pg_jsonb,
+-              {{gsql_string, model_endpoint_opt}, {pg_jsonb, arg_opt}},
+-              nullptr},
+-          googlesql::FunctionSignature{
+-              pg_jsonb,
+-              {{pg_jsonb, model_endpoint_opt}, {pg_jsonb, arg_opt}},
+-              nullptr}},
+-      googlesql::FunctionOptions().set_evaluator({EvalMlPredictRow}));
+-}
++// ML_PREDICT_ROW (PG.JSONB based) is unavailable in this build.
+ 
+ std::optional<std::tuple<std::string, std::string, std::string>>
+ ParseFullyQualifiedColumnPath(const std::string& qualified_column_path) {
+@@ -584,8 +491,7 @@ FunctionCatalog::FunctionCatalog(googlesql::TypeFactory* type_factory,
+   // Add aliases for the functions.
+   AddFunctionAliases();
+   AddMlFunctions(type_factory);
+-  AddSpannerPGFunctions();
+-  AddPGLambdaFunctions();
++  // Spanner PG functions / PG lambda functions are unavailable in this build.
+   AddSearchFunctions(type_factory);
+   AddMockGraphAlgoFunctions(table_valued_functions_);
+ }
+@@ -681,11 +587,6 @@ void FunctionCatalog::AddMlFunctions(googlesql::TypeFactory* type_factory) {
+     table_valued_functions_.insert(
+         {safe_ml_predict->FullName(), std::move(safe_ml_predict)});
+   }
+-
+-  {
+-    auto ml_predict_row_func = MlPredictRowFunction(catalog_name_);
+-    functions_[ml_predict_row_func->Name()] = std::move(ml_predict_row_func);
+-  }
+ }
+ 
+ void FunctionCatalog::AddSearchFunctions(googlesql::TypeFactory* type_factory) {
+@@ -702,45 +603,6 @@ void FunctionCatalog::AddSearchFunctions(googlesql::TypeFactory* type_factory) {
+   }
+ }
+ 
+-// Adds Spanner PG-specific functions to the list of known functions.
+-void FunctionCatalog::AddSpannerPGFunctions() {
+-  SpannerPGFunctions spanner_pg_functions =
+-      GetSpannerPGFunctions(catalog_name_);
+-
+-  for (auto& function : spanner_pg_functions) {
+-    // If function exists, add extra signatures instead of overwriting.
+-    // Needed for JSONB.
+-    if (auto f = functions_.find(function->Name()); f != functions_.end()) {
+-      // Copy the existing options and add any evaluators if they exist.
+-      googlesql::FunctionOptions function_options =
+-          f->second->function_options().Copy();
+-      // Add function evaluators if they exist.
+-      if (function->GetFunctionEvaluatorFactory() != nullptr) {
+-        function_options.set_evaluator_factory(
+-            function->GetFunctionEvaluatorFactory());
+-      } else if (function->GetAggregateFunctionEvaluatorFactory() != nullptr) {
+-        function_options.set_aggregate_function_evaluator_factory(
+-            function->GetAggregateFunctionEvaluatorFactory());
+-      }
+-      auto new_function = std::make_unique<googlesql::Function>(
+-          f->second->Name(), f->second->GetGroup(), f->second->mode(),
+-          function->signatures(), function_options);
+-      for (auto& sig : f->second->signatures()) {
+-        new_function->AddSignature(sig);
+-      }
+-      f->second = std::move(new_function);
+-    } else {
+-      functions_[function->Name()] = std::move(function);
+-    }
+-  }
+-
+-  SpannerPGTVFs spanner_pg_tvfs = GetSpannerPGTVFs(catalog_name_);
+-
+-  for (auto& tvf : spanner_pg_tvfs) {
+-    table_valued_functions_[tvf->FullName()] = std::move(tvf);
+-  }
+-}
+-
+ void FunctionCatalog::GetFunction(const std::string& name,
+                                   const googlesql::Function** output) const {
+   auto function_iter = functions_.find(name);
+@@ -786,216 +648,6 @@ void FunctionCatalog::AddFunctionAliases() {
+   }
+ }
+ 
+-void FunctionCatalog::AddPGLambdaFunctions() {
+-  // These date/timestamp PG functions need to use a lambda to access the
+-  // default time zone in the latest schema, so they need to be defined here.
+-  auto to_char_function = GetPGToCharFunction(catalog_name_);
+-  functions_[to_char_function->Name()] = std::move(to_char_function);
+-  auto extract_function = GetPGExtractFunction(catalog_name_);
+-  functions_[extract_function->Name()] = std::move(extract_function);
+-  auto cast_to_timestamp_function = GetPGCastToTimestampFunction(catalog_name_);
+-  functions_[cast_to_timestamp_function->Name()] =
+-      std::move(cast_to_timestamp_function);
+-  auto cast_to_string_function = GetPGCastToStringFunction(catalog_name_);
+-  functions_[cast_to_string_function->Name()] =
+-      std::move(cast_to_string_function);
+-  auto date_trunc_function = GetPGDateTruncFunction(catalog_name_);
+-  functions_[date_trunc_function->Name()] = std::move(date_trunc_function);
+-}
+-
+-std::unique_ptr<googlesql::Function> FunctionCatalog::GetPGToCharFunction(
+-    const std::string& catalog_name) {
+-  static const googlesql::Type* gsql_pg_numeric =
+-      postgres_translator::spangres::datatypes::GetPgNumericType();
+-  // Defines the function as a lambda, so it has access to the schema.
+-  auto initialize_pg_timezone = [&]() {
+-    std::string default_time_zone = latest_schema_ != nullptr
+-                                        ? latest_schema_->default_time_zone()
+-                                        : kDefaultTimeZone;
+-    absl::Status status = postgres_translator::interfaces::InitPGTimezone(
+-        default_time_zone.c_str());
+-    if (!status.ok()) {
+-      ABSL_LOG(ERROR) << "Failed to initialize PG timezone for to_char function: "
+-                 << status;
+-    }
+-  };
+-  googlesql::FunctionOptions function_options;
+-  function_options.set_evaluator(postgres_translator::PGFunctionEvaluator(
+-      postgres_translator::EvalToChar, initialize_pg_timezone, [] {
+-        CleanupPostgresNumberCache();
+-        CleanupPostgresDateTimeCache();
+-      }));
+-  function_options.set_arguments_are_coercible(false);
+-  function_options.set_supports_safe_error_mode(false);
+-  return std::make_unique<googlesql::Function>(
+-      postgres_translator::kPGToCharFunctionName, catalog_name,
+-      googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{
+-              gsql_string, {gsql_int64, gsql_string}, /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{gsql_string,
+-                                       {gsql_timestamp, gsql_string},
+-                                       /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{gsql_string,
+-                                       {gsql_double, gsql_string},
+-                                       /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{gsql_string,
+-                                       {gsql_float, gsql_string},
+-                                       /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{gsql_string,
+-                                       {gsql_pg_numeric, gsql_string},
+-                                       /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{gsql_string,
+-                                       {gsql_interval, gsql_string},
+-                                       /*context_ptr=*/nullptr},
+-      },
+-      function_options);
+-}
+-
+-std::unique_ptr<googlesql::Function> FunctionCatalog::GetPGExtractFunction(
+-    const std::string& catalog_name) {
+-  static const googlesql::Type* gsql_pg_numeric =
+-      postgres_translator::spangres::datatypes::GetPgNumericType();
+-  // Defines the function as a lambda, so it has access to the schema.
+-  auto initialize_pg_timezone = [&]() {
+-    std::string default_time_zone = latest_schema_ != nullptr
+-                                        ? latest_schema_->default_time_zone()
+-                                        : kDefaultTimeZone;
+-    absl::Status status = postgres_translator::interfaces::InitPGTimezone(
+-        default_time_zone.c_str());
+-    if (!status.ok()) {
+-      ABSL_LOG(ERROR) << "Failed to initialize PG timezone for extract function: "
+-                 << status;
+-    }
+-  };
+-  googlesql::FunctionOptions function_options;
+-  function_options.set_evaluator(postgres_translator::PGFunctionEvaluator(
+-      postgres_translator::EvalExtract, initialize_pg_timezone,
+-      CleanupPostgresDateTimeCache));
+-  function_options.set_arguments_are_coercible(false);
+-  function_options.set_supports_safe_error_mode(false);
+-
+-  return std::make_unique<googlesql::Function>(
+-      postgres_translator::kPGExtractFunctionName, catalog_name,
+-      googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{gsql_pg_numeric,
+-                                       {googlesql::types::StringType(),
+-                                        googlesql::types::TimestampType()},
+-                                       nullptr},
+-          googlesql::FunctionSignature{
+-              gsql_pg_numeric,
+-              {googlesql::types::StringType(), googlesql::types::DateType()},
+-              nullptr}},
+-      function_options);
+-}
+-
+-std::unique_ptr<googlesql::Function>
+-FunctionCatalog::GetPGCastToTimestampFunction(const std::string& catalog_name) {
+-  // Defines the function as a lambda, so it has access to the schema.
+-  auto initialize_pg_timezone = [&]() {
+-    std::string default_time_zone = latest_schema_ != nullptr
+-                                        ? latest_schema_->default_time_zone()
+-                                        : kDefaultTimeZone;
+-    absl::Status status = postgres_translator::interfaces::InitPGTimezone(
+-        default_time_zone.c_str());
+-    if (!status.ok()) {
+-      ABSL_LOG(ERROR)
+-          << "Failed to initialize PG timezone for cast_to_timestamp function: "
+-          << status;
+-    }
+-  };
+-  googlesql::FunctionOptions function_options;
+-  function_options.set_evaluator(postgres_translator::PGFunctionEvaluator(
+-      postgres_translator::EvalCastToTimestamp, initialize_pg_timezone,
+-      CleanupPostgresDateTimeCache));
+-  function_options.set_arguments_are_coercible(false);
+-  function_options.set_supports_safe_error_mode(false);
+-
+-  return std::make_unique<googlesql::Function>(
+-      postgres_translator::kPGCastToTimestampFunctionName, catalog_name,
+-      googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{googlesql::types::TimestampType(),
+-                                       {googlesql::types::StringType()},
+-                                       nullptr}},
+-      function_options);
+-}
+-
+-std::unique_ptr<googlesql::Function> FunctionCatalog::GetPGCastToStringFunction(
+-    const std::string& catalog_name) {
+-  static const googlesql::Type* gsql_pg_numeric =
+-      postgres_translator::spangres::datatypes::GetPgNumericType();
+-  // Defines the function as a lambda, so it has access to the schema.
+-  auto initialize_pg_timezone = [&]() {
+-    std::string default_time_zone = latest_schema_ != nullptr
+-                                        ? latest_schema_->default_time_zone()
+-                                        : kDefaultTimeZone;
+-    absl::Status status = postgres_translator::interfaces::InitPGTimezone(
+-        default_time_zone.c_str());
+-    if (!status.ok()) {
+-      ABSL_LOG(ERROR)
+-          << "Failed to initialize PG timezone for cast_to_string function: "
+-          << status;
+-    }
+-  };
+-  googlesql::FunctionOptions function_options;
+-  function_options.set_evaluator(postgres_translator::PGFunctionEvaluator(
+-      postgres_translator::EvalCastToString, initialize_pg_timezone));
+-  function_options.set_arguments_are_coercible(false);
+-  function_options.set_supports_safe_error_mode(false);
+-
+-  return std::make_unique<googlesql::Function>(
+-      postgres_translator::kPGCastToStringFunctionName, catalog_name,
+-      googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{
+-              gsql_string, {gsql_pg_numeric}, /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{
+-              gsql_string, {gsql_interval}, /*context_ptr=*/nullptr},
+-          googlesql::FunctionSignature{
+-              gsql_string, {gsql_uuid}, /*context_ptr=*/nullptr},
+-      },
+-      function_options);
+-}
+-
+-std::unique_ptr<googlesql::Function> FunctionCatalog::GetPGDateTruncFunction(
+-    const std::string& catalog_name) {
+-  // Defines the function as a lambda, so it has access to the schema.
+-  auto initialize_pg_timezone = [&]() {
+-    std::string default_time_zone = latest_schema_ != nullptr
+-                                        ? latest_schema_->default_time_zone()
+-                                        : kDefaultTimeZone;
+-    absl::Status status = postgres_translator::interfaces::InitPGTimezone(
+-        default_time_zone.c_str());
+-    if (!status.ok()) {
+-      ABSL_LOG(ERROR) << "Failed to initialize PG timezone for date_trunc function: "
+-                 << status;
+-    }
+-  };
+-  googlesql::FunctionOptions function_options;
+-  function_options.set_evaluator(postgres_translator::PGFunctionEvaluator(
+-      postgres_translator::EvalTimestamptzTrunc, initialize_pg_timezone,
+-      CleanupPostgresDateTimeCache));
+-  function_options.set_arguments_are_coercible(false);
+-  function_options.set_supports_safe_error_mode(false);
+-
+-  return std::make_unique<googlesql::Function>(
+-      postgres_translator::kPGTimestamptzTruncFunctionName, catalog_name,
+-      googlesql::Function::SCALAR,
+-      std::vector<googlesql::FunctionSignature>{
+-          googlesql::FunctionSignature{googlesql::types::TimestampType(),
+-                                       {googlesql::types::StringType(),
+-                                        googlesql::types::TimestampType()},
+-                                       nullptr},
+-          googlesql::FunctionSignature{googlesql::types::TimestampType(),
+-                                       {googlesql::types::StringType(),
+-                                        googlesql::types::TimestampType(),
+-                                        googlesql::types::StringType()},
+-                                       nullptr}},
+-      function_options);
+-}
+-
+ std::unique_ptr<googlesql::Function>
+ FunctionCatalog::GetInternalSequenceStateFunction(
+     const std::string& catalog_name) {
+diff --git a/backend/query/function_catalog.h b/backend/query/function_catalog.h
+index 60aa8b0..58d1a0c 100644
+--- a/backend/query/function_catalog.h
++++ b/backend/query/function_catalog.h
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #ifndef THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_FUNCTION_CATALOG_H_
+ #define THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_FUNCTION_CATALOG_H_
+ 
+@@ -70,30 +72,13 @@ class FunctionCatalog {
+ 
+  private:
+   void AddGoogleSQLBuiltInFunctions(googlesql::TypeFactory* type_factory);
+-  void AddPGLambdaFunctions();
+   void AddSpannerFunctions();
+   void AddGraphSafeToJsonSignatures();
+   void AddMlFunctions(googlesql::TypeFactory* type_factory);
+   void AddSearchFunctions(googlesql::TypeFactory* type_factory);
+ 
+-  void AddSpannerPGFunctions();
+   void AddFunctionAliases();
+ 
+-  std::unique_ptr<googlesql::Function> GetPGToCharFunction(
+-      const std::string& catalog_name);
+-
+-  std::unique_ptr<googlesql::Function> GetPGExtractFunction(
+-      const std::string& catalog_name);
+-
+-  std::unique_ptr<googlesql::Function> GetPGCastToTimestampFunction(
+-      const std::string& catalog_name);
+-
+-  std::unique_ptr<googlesql::Function> GetPGCastToStringFunction(
+-      const std::string& catalog_name);
+-
+-  std::unique_ptr<googlesql::Function> GetPGDateTruncFunction(
+-      const std::string& catalog_name);
+-
+   std::unique_ptr<googlesql::Function> GetInternalSequenceStateFunction(
+       const std::string& catalog_name);
+ 
+diff --git a/backend/query/information_schema_catalog.cc b/backend/query/information_schema_catalog.cc
+index 871615e..8ad5aa3 100644
+--- a/backend/query/information_schema_catalog.cc
++++ b/backend/query/information_schema_catalog.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/information_schema_catalog.h"
+ 
+ #include <algorithm>
+@@ -58,9 +60,6 @@
+ #include "backend/schema/parser/ddl_parser.h"
+ #include "backend/schema/printer/print_ddl.h"
+ #include "backend/schema/updater/ddl_type_conversion.h"
+-#include "third_party/spanner_pg/catalog/spangres_type.h"
+-#include "third_party/spanner_pg/ddl/spangres_direct_schema_printer_impl.h"
+-#include "third_party/spanner_pg/ddl/spangres_schema_printer.h"
+ #include "google/protobuf/descriptor.h"
+ #include "google/protobuf/util/json_util.h"
+ 
+@@ -565,13 +564,7 @@ InformationSchemaCatalog::InformationSchemaCatalog(
+                                        : DatabaseDialect::GOOGLE_STANDARD_SQL) {
+   // Create a subset of tables using columns metadata.
+   if (dialect_ == DatabaseDialect::POSTGRESQL) {
+-    absl::StatusOr<
+-        std::unique_ptr<postgres_translator::spangres::SpangresSchemaPrinter>>
+-        printer =
+-            postgres_translator::spangres::CreateSpangresDirectSchemaPrinter();
+-    ABSL_CHECK_OK(printer.status());  // crash ok
+-    pg_schema_printer_ = std::move(*printer);
+-
++    // The PG schema printer is unavailable in this build.
+     tables_by_name_ = AddTablesFromMetadata(
+         PGColumnsMetadata(), *kSpannerPGTypeToGSQLType, *kSupportedPGTables);
+   } else {
+@@ -826,16 +819,9 @@ void InformationSchemaCatalog::FillTablesTable() {
+   for (const Table* table : default_schema_->tables()) {
+     absl::flat_hash_map<std::string, googlesql::Value> specific_kvs;
+     if (dialect_ == DatabaseDialect::POSTGRESQL) {
++      // The PG schema printer is unavailable in this build; the PG-formatted
++      // row deletion policy cannot be produced.
+       googlesql::Value row_deletion_policy_value = NullString();
+-      if (table->row_deletion_policy().has_value()) {
+-        // Use the PG schema printer to get the row deletion policy in a format
+-        // expected by the PG dialect.
+-        absl::StatusOr<std::string> row_deletion_policy =
+-            pg_schema_printer_->PrintRowDeletionPolicyForEmulator(
+-                table->row_deletion_policy().value());
+-        ABSL_CHECK_OK(row_deletion_policy.status());  // crash ok
+-        row_deletion_policy_value = String(*row_deletion_policy);
+-      }
+       specific_kvs[kRowDeletionPolicyExpression] = row_deletion_policy_value;
+     } else {
+       specific_kvs[kRowDeletionPolicyExpression] =
+@@ -942,22 +928,8 @@ googlesql::Value InformationSchemaCatalog::GetSpannerType(
+ 
+ googlesql::Value InformationSchemaCatalog::GetSpannerType(
+     const googlesql::Type* type, std::optional<int64_t> length) {
+-  if (dialect_ == DatabaseDialect::POSTGRESQL) {
+-    ddl::ColumnDefinition column_def = GoogleSqlTypeToDDLColumnType(type);
+-    if (length != std::nullopt) {
+-      if (type->IsArray()) {
+-        column_def.mutable_array_subtype()->set_length(length.value());
+-      } else {
+-        column_def.set_length(length.value());
+-      }
+-    }
+-    absl::StatusOr<std::string> spanner_type =
+-        pg_schema_printer_->PrintTypeForEmulator(column_def);
+-    ABSL_CHECK_OK(spanner_type.status());  // crash ok
+-
+-    return String(*spanner_type);
+-  }
+-
++  // The PG schema printer is unavailable in this build; PostgreSQL dialect
++  // falls back to the GoogleSQL type spelling.
+   return String(ColumnTypeToString(type, length));
+ }
+ 
+@@ -987,10 +959,8 @@ googlesql::Value GetPGNumericPrecisionRadix(const googlesql::Type* type) {
+   // Setting the numeric precision radix.
+   if (type->IsDouble() || type->IsInt64() || type->IsFloat()) {
+     return Int64(kBinaryRepresentedNumericPrecisionRadix);
+-  } else if (type == postgres_translator::spangres::types::PgNumericMapping()
+-                         ->mapped_type()) {
+-    return Int64(kDecimalRepresentedNumericPrecisionRadix);
+   }
++  // PG.NUMERIC is unavailable in this build.
+   return NullInt64();
+ }
+ 
+diff --git a/backend/query/information_schema_catalog.h b/backend/query/information_schema_catalog.h
+index 9338666..36c6373 100644
+--- a/backend/query/information_schema_catalog.h
++++ b/backend/query/information_schema_catalog.h
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #ifndef THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_INFORMATION_SCHEMA_CATALOG_H_
+ #define THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_INFORMATION_SCHEMA_CATALOG_H_
+ 
+@@ -30,7 +32,6 @@
+ #include "backend/query/spanner_sys_catalog.h"
+ #include "backend/schema/catalog/model.h"
+ #include "backend/schema/catalog/schema.h"
+-#include "third_party/spanner_pg/ddl/spangres_schema_printer.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -69,8 +70,6 @@ class InformationSchemaCatalog : public googlesql::SimpleCatalog {
+   const ::google::spanner::admin::database::v1::DatabaseDialect dialect_;
+   absl::flat_hash_map<std::string, std::unique_ptr<googlesql::SimpleTable>>
+       tables_by_name_;
+-  std::unique_ptr<postgres_translator::spangres::SpangresSchemaPrinter>
+-      pg_schema_printer_;
+ 
+   inline std::string GetNameForDialect(absl::string_view name);
+   std::pair<googlesql::Value, googlesql::Value> GetPGDataTypeAndSpannerType(
+diff --git a/backend/query/ml/BUILD b/backend/query/ml/BUILD
+index b141822..95b16f0 100644
+--- a/backend/query/ml/BUILD
++++ b/backend/query/ml/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -103,7 +105,6 @@ cc_library(
+     deps = [
+         ":model_evaluator",
+         "//common:errors",
+-        "//third_party/spanner_pg/datatypes/extended:pg_jsonb_type",
+         "@com_google_absl//absl/status",
+         "@com_google_absl//absl/status:statusor",
+         "@com_google_absl//absl/strings",
+diff --git a/backend/query/ml/ml_predict_row_function.cc b/backend/query/ml/ml_predict_row_function.cc
+index 8f38102..7317df6 100644
+--- a/backend/query/ml/ml_predict_row_function.cc
++++ b/backend/query/ml/ml_predict_row_function.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/ml/ml_predict_row_function.h"
+ 
+ #include <cstdint>
+@@ -34,7 +36,6 @@
+ #include "common/errors.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_jsonb_type.h"
+ 
+ namespace google::spanner::emulator::backend {
+ namespace {
+@@ -42,9 +43,6 @@ namespace {
+ using googlesql::JSONValue;
+ using googlesql::JSONValueConstRef;
+ using googlesql::JSONValueRef;
+-using postgres_translator::spangres::datatypes::CreatePgJsonbValue;
+-using postgres_translator::spangres::datatypes::GetPgJsonbNormalizedValue;
+-using postgres_translator::spangres::datatypes::GetPgJsonbType;
+ 
+ inline constexpr absl::string_view kModelEndpointOptionName = "endpoint";
+ inline constexpr absl::string_view kModelEndpointsOptionName = "endpoints";
+@@ -189,7 +187,9 @@ absl::StatusOr<googlesql::Value> PredictionsToJsonB(
+     GOOGLESQL_RETURN_IF_ERROR(predictions_json.AppendArrayElement(
+         JSONValue::MoveFrom(prediction.GetRef())));
+   }
+-  return CreatePgJsonbValue(result.GetConstRef().ToString());
++  // PG.JSONB is unavailable in this build.
++  return absl::UnimplementedError(
++      "PostgreSQL dialect is not supported in this build");
+ }
+ 
+ }  // namespace
+@@ -205,9 +205,6 @@ absl::StatusOr<googlesql::Value> EvalMlPredictRow(
+   } else if (args[0].type()->IsString()) {
+     GOOGLESQL_ASSIGN_OR_RETURN(model_endpoint,
+                      ModelEndpoint::FromString(args[0].string_value()));
+-  } else if (args[0].type()->Equals(GetPgJsonbType())) {
+-    GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord cord, GetPgJsonbNormalizedValue(args[0]));
+-    GOOGLESQL_ASSIGN_OR_RETURN(model_endpoint, ModelEndpoint::FromJsonb(cord.Flatten()));
+   } else {
+     GOOGLESQL_RET_CHECK_FAIL() << "Unexpected model_endpoint argument type "
+                      << args[0].type()->TypeName(googlesql::PRODUCT_EXTERNAL,
+@@ -222,9 +219,6 @@ absl::StatusOr<googlesql::Value> EvalMlPredictRow(
+   parameters.GetRef().SetToEmptyObject();
+   if (args[1].is_null()) {
+     return error::MlPredictRow_Argument_Null(kMlPredictRowParamArgs);
+-  } else if (args[1].type()->Equals(GetPgJsonbType())) {
+-    GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord cord, GetPgJsonbNormalizedValue(args[1]));
+-    GOOGLESQL_RETURN_IF_ERROR(ParseArgsJsonb(cord.Flatten(), &instances, &parameters));
+   } else {
+     GOOGLESQL_RET_CHECK_FAIL() << "Unexpected args var type "
+                      << args[1].type()->TypeName(googlesql::PRODUCT_EXTERNAL,
+diff --git a/backend/query/remote_udf/BUILD b/backend/query/remote_udf/BUILD
+index 122fa08..6a096e0 100644
+--- a/backend/query/remote_udf/BUILD
++++ b/backend/query/remote_udf/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -26,11 +28,6 @@ cc_library(
+     srcs = ["remote_udf_evaluator.cc"],
+     hdrs = ["remote_udf_evaluator.h"],
+     deps = [
+-        "//third_party/spanner_pg/datatypes/extended:pg_jsonb_type",
+-        "//third_party/spanner_pg/datatypes/extended:pg_numeric_type",
+-        "//third_party/spanner_pg/datatypes/extended:pg_oid_type",
+-        "//third_party/spanner_pg/datatypes/extended:spanner_extended_type",
+-        "//third_party/spanner_pg/src/backend:backend_with_shims",
+         "@com_google_absl//absl/base:core_headers",
+         "@com_google_absl//absl/base:no_destructor",
+         "@com_google_absl//absl/container:flat_hash_map",
+diff --git a/backend/query/remote_udf/remote_udf_evaluator.cc b/backend/query/remote_udf/remote_udf_evaluator.cc
+index 452c411..ada7405 100644
+--- a/backend/query/remote_udf/remote_udf_evaluator.cc
++++ b/backend/query/remote_udf/remote_udf_evaluator.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/remote_udf/remote_udf_evaluator.h"
+ 
+ #include <cstdint>
+@@ -54,10 +56,6 @@
+ #include "httplib.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_jsonb_type.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_numeric_type.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_oid_type.h"
+-#include "third_party/spanner_pg/datatypes/extended/spanner_extended_type.h"
+ #include "google/protobuf/descriptor.h"
+ #include "farmhash.h"
+ 
+@@ -66,7 +64,6 @@ ABSL_FLAG(std::string, remote_functions_host_port, "",
+ 
+ namespace google::spanner::emulator::backend {
+ 
+-using postgres_translator::spangres::datatypes::SpannerExtendedType;
+ using TypeAnnotationCode = ::google::spanner::v1::TypeAnnotationCode;
+ 
+ // Share http clients between requests to avoid TCP connection overhead.
+@@ -257,22 +254,9 @@ absl::StatusOr<googlesql::Value> RemoteUdfProtocol::ToValue(
+       json_value.GetRef().SetUInt64(fingerprint);
+       return googlesql::Value::Json(std::move(json_value));
+     }
+-    case googlesql::TYPE_EXTENDED: {
+-      switch (static_cast<const SpannerExtendedType*>(type)->code()) {
+-        case TypeAnnotationCode::PG_JSONB:
+-          return postgres_translator::spangres::datatypes::CreatePgJsonbValue(
+-              absl::StrCat(fingerprint));
+-        case TypeAnnotationCode::PG_NUMERIC:
+-          return postgres_translator::spangres::datatypes::CreatePgNumericValue(
+-              absl::StrCat(fingerprint));
+-        case TypeAnnotationCode::PG_OID:
+-          return postgres_translator::spangres::datatypes::CreatePgOidValue(
+-              static_cast<uint32_t>(fingerprint));
+-        default:
+-          break;
+-      }
++    case googlesql::TYPE_EXTENDED:
++      // Extended types (PG.*) are unavailable in this build.
+       break;
+-    }
+     case googlesql::TYPE_INTERVAL: {
+       GOOGLESQL_ASSIGN_OR_RETURN(
+           googlesql::IntervalValue interval_value,
+@@ -441,27 +425,9 @@ absl::StatusOr<googlesql::Value> RemoteUdfProtocol::ToValue(
+     case googlesql::TYPE_JSON:
+       return googlesql::Value::Json(googlesql::JSONValue::CopyFrom(json));
+ 
+-    case googlesql::TYPE_EXTENDED: {
+-      switch (static_cast<const SpannerExtendedType*>(type)->code()) {
+-        case TypeAnnotationCode::PG_JSONB:
+-          return postgres_translator::spangres::datatypes::CreatePgJsonbValue(
+-              json.ToString());
+-        case TypeAnnotationCode::PG_NUMERIC:
+-          if (json.IsString()) {
+-            return postgres_translator::spangres::datatypes::
+-                CreatePgNumericValue(json.GetString());
+-          }
+-          break;
+-        case TypeAnnotationCode::PG_OID: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(uint32_t result, ToIntegerValue<uint32_t>(json));
+-          return postgres_translator::spangres::datatypes::CreatePgOidValue(
+-              result);
+-        }
+-        default:
+-          break;
+-      }
++    case googlesql::TYPE_EXTENDED:
++      // Extended types (PG.*) are unavailable in this build.
+       break;
+-    }
+     case googlesql::TYPE_INTERVAL: {
+       if (json.IsString()) {
+         GOOGLESQL_ASSIGN_OR_RETURN(googlesql::IntervalValue interval_value,
+@@ -612,35 +578,9 @@ absl::StatusOr<googlesql::JSONValue> RemoteUdfProtocol::ToJson(
+     case googlesql::TYPE_JSON:
+       json_value = googlesql::JSONValue::CopyFrom(value.json_value());
+       break;
+-    case googlesql::TYPE_EXTENDED: {
+-      switch (static_cast<const SpannerExtendedType*>(value.type())->code()) {
+-        case TypeAnnotationCode::PG_JSONB: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord jsonb_value,
+-                           postgres_translator::spangres::datatypes::
+-                               GetPgJsonbNormalizedValue(value));
+-          GOOGLESQL_ASSIGN_OR_RETURN(json_value, googlesql::JSONValue::ParseJSONString(
+-                                           absl::StrCat(jsonb_value)));
+-          break;
+-        }
+-        case TypeAnnotationCode::PG_NUMERIC: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord numeric_value,
+-                           postgres_translator::spangres::datatypes::
+-                               GetPgNumericNormalizedValue(value));
+-          json_ref.SetString(absl::StrCat(numeric_value));
+-          break;
+-        }
+-        case TypeAnnotationCode::PG_OID: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(
+-              int64_t oid_value,
+-              postgres_translator::spangres::datatypes::GetPgOidValue(value));
+-          json_ref.SetUInt64(oid_value);
+-          break;
+-        }
+-        default:
+-          break;
+-      }
++    case googlesql::TYPE_EXTENDED:
++      // Extended types (PG.*) are unavailable in this build.
+       break;
+-    }
+     case googlesql::TYPE_INTERVAL: {
+       json_ref.SetString(value.interval_value().ToISO8601());
+       break;
+@@ -740,28 +680,7 @@ absl::StatusOr<uint64_t> RemoteUdfProtocol::Fingerprint(
+     case googlesql::TYPE_JSON:
+       return farmhash::Fingerprint64(value.json_value().ToString());
+     case googlesql::TYPE_EXTENDED:
+-      switch (static_cast<const SpannerExtendedType*>(value.type())->code()) {
+-        case TypeAnnotationCode::PG_JSONB: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord jsonb_value,
+-                           postgres_translator::spangres::datatypes::
+-                               GetPgJsonbNormalizedValue(value));
+-          return farmhash::Fingerprint64(absl::StrCat(jsonb_value));
+-        }
+-        case TypeAnnotationCode::PG_NUMERIC: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(absl::Cord numeric_value,
+-                           postgres_translator::spangres::datatypes::
+-                               GetPgNumericNormalizedValue(value));
+-          return farmhash::Fingerprint64(absl::StrCat(numeric_value));
+-        }
+-        case TypeAnnotationCode::PG_OID: {
+-          GOOGLESQL_ASSIGN_OR_RETURN(
+-              int64_t oid_value,
+-              postgres_translator::spangres::datatypes::GetPgOidValue(value));
+-          return farmhash::Fingerprint64(absl::StrCat(oid_value));
+-        }
+-        default:
+-          break;
+-      }
++      // Extended types (PG.*) are unavailable in this build.
+       break;
+     case googlesql::TYPE_INTERVAL: {
+       return farmhash::Fingerprint64(value.interval_value().ToString());
+diff --git a/backend/query/search/BUILD b/backend/query/search/BUILD
+index 3421b21..5702b43 100644
+--- a/backend/query/search/BUILD
++++ b/backend/query/search/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ load(
+@@ -111,7 +113,6 @@ cc_library(
+         ":substring_tokenizer",
+         ":tokenlist_concat",
+         "//backend/schema/catalog:schema",
+-        "//third_party/spanner_pg/datatypes/extended:pg_jsonb_type",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/log",
+         "@com_google_absl//absl/status",
+diff --git a/backend/query/search/search_function_catalog.cc b/backend/query/search/search_function_catalog.cc
+index 2796b1f..662746d 100644
+--- a/backend/query/search/search_function_catalog.cc
++++ b/backend/query/search/search_function_catalog.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/query/search/search_function_catalog.h"
+ 
+ #include <memory>
+@@ -51,7 +53,6 @@
+ #include "backend/query/search/substring_tokenizer.h"
+ #include "backend/query/search/tokenlist_concat.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_jsonb_type.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -62,8 +63,6 @@ namespace search {
+ 
+ namespace {
+ 
+-using postgres_translator::spangres::datatypes::CreatePgJsonbValue;
+-using postgres_translator::spangres::datatypes::GetPgJsonbType;
+ 
+ // Function name to tokenize text. The function is used to define generated
+ // TOKENLIST column used for full text search.
+@@ -602,19 +601,6 @@ absl::StatusOr<googlesql::Value> EvalSnippet(
+   return googlesql::Value::Json(std::move(json_value));
+ }
+ 
+-absl::StatusOr<googlesql::Value> EvalSnippetPG(
+-    absl::Span<const googlesql::Value> args) {
+-  auto snippet_value = SnippetEvaluator::Evaluate(args);
+-  if (!snippet_value.ok()) {
+-    return snippet_value.status();
+-  }
+-  std::optional<std::string> snippet = snippet_value.value();
+-  if (!snippet.has_value()) {
+-    return googlesql::Value::Null(GetPgJsonbType());
+-  }
+-  return CreatePgJsonbValue(snippet.value());
+-}
+-
+ std::unique_ptr<googlesql::Function> SnippetFunction(
+     googlesql::TypeFactory* type_factory, const std::string& catalog_name,
+     database_api::DatabaseDialect dialect) {
+@@ -626,7 +612,6 @@ std::unique_ptr<googlesql::Function> SnippetFunction(
+   const googlesql::Type* bool_type = type_factory->get_bool();
+   const googlesql::Type* int64_type = type_factory->get_int64();
+   const googlesql::Type* json_type = type_factory->get_json();
+-  auto pg_jsonb = postgres_translator::spangres::datatypes::GetPgJsonbType();
+ 
+   // Signature: SNIPPET(string value,
+   //                    string query,
+@@ -637,25 +622,7 @@ std::unique_ptr<googlesql::Function> SnippetFunction(
+   //                    string content_type = "text/html",
+   //                    string dictionary = NULL)
+ 
+-  if (dialect == database_api::DatabaseDialect::POSTGRESQL) {
+-    function_options.set_evaluator(googlesql::FunctionEvaluator(EvalSnippetPG));
+-    return std::make_unique<googlesql::Function>(
+-        kSnippetFunctionName, catalog_name, googlesql::Function::SCALAR,
+-        std::vector<googlesql::FunctionSignature>{googlesql::FunctionSignature{
+-            pg_jsonb,
+-            {{string_type, GetRequiredArgumentTypeOptions("value", false)},
+-             {string_type, GetRequiredArgumentTypeOptions("query")},
+-             {bool_type, GetNamedOptionalArgTypeOptions("enhance_query")},
+-             {string_type, GetNamedOptionalArgTypeOptions("language_tag")},
+-             {int64_type,
+-              GetNamedOptionalArgTypeOptions("max_snippet_width", false)},
+-             {int64_type,
+-              GetNamedOptionalArgTypeOptions("max_snippets", false)},
+-             {string_type, GetNamedOptionalArgTypeOptions("content_type")},
+-             {string_type, GetNamedOptionalArgTypeOptions("dictionary")}},
+-            nullptr}},
+-        function_options);
+-  }
++  // PostgreSQL dialect (PG.JSONB signature) is unavailable in this build.
+ 
+   function_options.set_evaluator(googlesql::FunctionEvaluator(EvalSnippet));
+   return std::make_unique<googlesql::Function>(
+@@ -810,19 +777,7 @@ std::unique_ptr<googlesql::Function> TokenizeJsonFunction(
+   function_options.set_supports_safe_error_mode(false);
+ 
+   const googlesql::Type* tokenlist_type = type_factory->get_tokenlist();
+-  if (dialect == database_api::DatabaseDialect::POSTGRESQL) {
+-    // Signature: TOKENIZE_JSONB(jsonb value)
+-    function_options.set_evaluator(
+-        googlesql::FunctionEvaluator(JsonbTokenizer::Tokenize));
+-    auto pg_jsonb = postgres_translator::spangres::datatypes::GetPgJsonbType();
+-    return std::make_unique<googlesql::Function>(
+-        kTokenizeJsonbFunctionName, catalog_name, googlesql::Function::SCALAR,
+-        std::vector<googlesql::FunctionSignature>{googlesql::FunctionSignature{
+-            tokenlist_type,
+-            {{pg_jsonb, GetRequiredArgumentTypeOptions("value", false)}},
+-            nullptr}},
+-        function_options);
+-  }
++  // PostgreSQL dialect (TOKENIZE_JSONB) is unavailable in this build.
+ 
+   // GoogleSQL dialect signature: TOKENIZE_JSON(json value).
+   function_options.set_evaluator(
+diff --git a/backend/query/tables_from_metadata.h b/backend/query/tables_from_metadata.h
+index 2e603f1..2e37f8a 100644
+--- a/backend/query/tables_from_metadata.h
++++ b/backend/query/tables_from_metadata.h
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #ifndef THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_TABLES_FROM_METADATA_H_
+ #define THIRD_PARTY_CLOUD_SPANNER_EMULATOR_BACKEND_QUERY_TABLES_FROM_METADATA_H_
+ 
+@@ -28,7 +30,6 @@
+ #include "absl/container/flat_hash_map.h"
+ #include "absl/container/flat_hash_set.h"
+ #include "backend/query/info_schema_columns_metadata_values.h"
+-#include "third_party/spanner_pg/datatypes/extended/pg_oid_type.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -63,9 +64,7 @@ static const absl::NoDestructor<
+         {"character varying", googlesql::types::StringType()},
+         {"character varying[]", googlesql::types::StringArrayType()},
+         {"double precision", googlesql::types::DoubleType()},
+-        {"oid", postgres_translator::spangres::datatypes::GetPgOidType()},
+-        {"oid[]",
+-         postgres_translator::spangres::datatypes::GetPgOidArrayType()},
++        // "oid" / "oid[]" (PG.OID) are unavailable in this build.
+         {"timestamp with time zone", googlesql::types::TimestampType()},
+     }};
+ 
+diff --git a/backend/schema/printer/BUILD b/backend/schema/printer/BUILD
+index b1d09bf..85dee16 100644
+--- a/backend/schema/printer/BUILD
++++ b/backend/schema/printer/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ 
+ package(
+@@ -38,8 +40,6 @@ cc_library(
+         "//backend/schema/graph:schema_node",
+         "//backend/schema/parser:ddl_parser",
+         "//backend/schema/parser:ddl_reserved_words",  # buildcleaner: keep
+-        "//third_party/spanner_pg/ddl:spangres_direct_schema_printer_impl",
+-        "//third_party/spanner_pg/ddl:spangres_schema_printer",
+         "@com_google_absl//absl/container:flat_hash_set",
+         "@com_google_absl//absl/log",
+         "@com_google_absl//absl/log:check",
+diff --git a/backend/schema/printer/print_ddl.cc b/backend/schema/printer/print_ddl.cc
+index 98096e4..87b0d89 100644
+--- a/backend/schema/printer/print_ddl.cc
++++ b/backend/schema/printer/print_ddl.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/schema/printer/print_ddl.h"
+ 
+ #include <algorithm>
+@@ -59,8 +61,6 @@
+ #include "backend/schema/parser/ddl_parser.h"
+ #include "backend/schema/parser/ddl_reserved_words.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/ddl/spangres_direct_schema_printer_impl.h"
+-#include "third_party/spanner_pg/ddl/spangres_schema_printer.h"
+ #include "google/protobuf/repeated_ptr_field.h"
+ 
+ namespace google {
+@@ -68,7 +68,6 @@ namespace spanner {
+ namespace emulator {
+ namespace backend {
+ 
+-using ::postgres_translator::spangres::SpangresSchemaPrinter;
+ 
+ namespace {
+ 
+@@ -945,18 +944,8 @@ absl::StatusOr<std::vector<std::string>> PrintDDLStatements(
+     const Schema* schema) {
+   std::vector<std::string> statements;
+   if (schema->dialect() == database_api::DatabaseDialect::POSTGRESQL) {
+-    absl::StatusOr<std::unique_ptr<SpangresSchemaPrinter>> printer =
+-        postgres_translator::spangres::CreateSpangresDirectSchemaPrinter();
+-    GOOGLESQL_RETURN_IF_ERROR(printer.status());
+-    ddl::DDLStatementList ddl_statements = schema->Dump();
+-    for (const ddl::DDLStatement& statement : ddl_statements.statement()) {
+-      absl::StatusOr<std::vector<std::string>> printed_statements =
+-          (*printer)->PrintDDLStatementForEmulator(statement);
+-      GOOGLESQL_RETURN_IF_ERROR(printed_statements.status());
+-      statements.insert(statements.end(), (*printed_statements).begin(),
+-                        (*printed_statements).end());
+-    }
+-    return statements;
++    return absl::UnimplementedError(
++        "PostgreSQL dialect is not supported in this build");
+   }
+ 
+   // Print database options.
+diff --git a/backend/schema/updater/BUILD b/backend/schema/updater/BUILD
+index 3b907b1..0a8ed2a 100644
+--- a/backend/schema/updater/BUILD
++++ b/backend/schema/updater/BUILD
+@@ -16,6 +16,8 @@
+ 
+ # Build rules for some utilties used in schema processing.
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -32,7 +34,6 @@ cc_library(
+     deps = [
+         "//backend/schema/catalog:proto_bundle",
+         "//backend/schema/ddl:operations_cc_proto",
+-        "//third_party/spanner_pg/catalog:spangres_type",
+         "@com_google_absl//absl/status",
+         "@com_google_absl//absl/status:statusor",
+         "@com_google_googlesql//googlesql/base:ret_check",
+@@ -175,15 +176,6 @@ cc_library(
+         "//common:errors",
+         "//common:feature_flags",
+         "//common:limits",
+-        "//third_party/spanner_pg/ddl:ddl_translator",
+-        "//third_party/spanner_pg/ddl:pg_to_spanner_ddl_translator",
+-        "//third_party/spanner_pg/ddl:spangres_direct_schema_printer_impl",
+-        "//third_party/spanner_pg/ddl:spangres_schema_printer",
+-        "//third_party/spanner_pg/interface:emulator_parser",
+-        "//third_party/spanner_pg/interface:interfaces_with_stub_implementations",
+-        "//third_party/spanner_pg/interface:parser_interface",
+-        "//third_party/spanner_pg/shims:error_shim",
+-        "//third_party/spanner_pg/shims:memory_context_pg_arena",
+         "@com_google_absl//absl/algorithm:container",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+diff --git a/backend/schema/updater/ddl_type_conversion.cc b/backend/schema/updater/ddl_type_conversion.cc
+index 6d10fce..b4b0e44 100644
+--- a/backend/schema/updater/ddl_type_conversion.cc
++++ b/backend/schema/updater/ddl_type_conversion.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/schema/updater/ddl_type_conversion.h"
+ 
+ #include <vector>
+@@ -25,7 +27,6 @@
+ #include "absl/status/statusor.h"
+ #include "backend/schema/catalog/proto_bundle.h"
+ #include "backend/schema/ddl/operations.pb.h"
+-#include "third_party/spanner_pg/catalog/spangres_type.h"
+ #include "google/protobuf/message.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+@@ -69,13 +70,13 @@ absl::StatusOr<const googlesql::Type*> DDLColumnTypeToGoogleSqlType(
+     case ddl::TypeDefinition::UUID:
+       return type_factory->get_uuid();
+     case ddl::TypeDefinition::PG_NUMERIC:
+-      return postgres_translator::spangres::types::PgNumericMapping()
+-          ->mapped_type();
++      return absl::UnimplementedError(
++          "PostgreSQL dialect is not supported in this build");
+     case ddl::TypeDefinition::JSON:
+       return type_factory->get_json();
+     case ddl::TypeDefinition::PG_JSONB:
+-      return postgres_translator::spangres::types::PgJsonbMapping()
+-          ->mapped_type();
++      return absl::UnimplementedError(
++          "PostgreSQL dialect is not supported in this build");
+     case ddl::TypeDefinition::ARRAY: {
+       GOOGLESQL_RET_CHECK(ddl_type_def.has_array_subtype())
+           << "Missing array_subtype field for ddl::TypeDefinition input: "
+@@ -176,13 +177,13 @@ absl::StatusOr<const googlesql::Type*> DDLColumnTypeToGoogleSqlType(
+     case ddl::ColumnDefinition::NUMERIC:
+       return type_factory->get_numeric();
+     case ddl::ColumnDefinition::PG_NUMERIC:
+-      return postgres_translator::spangres::types::PgNumericMapping()
+-          ->mapped_type();
++      return absl::UnimplementedError(
++          "PostgreSQL dialect is not supported in this build");
+     case ddl::ColumnDefinition::JSON:
+       return type_factory->get_json();
+     case ddl::ColumnDefinition::PG_JSONB:
+-      return postgres_translator::spangres::types::PgJsonbMapping()
+-          ->mapped_type();
++      return absl::UnimplementedError(
++          "PostgreSQL dialect is not supported in this build");
+     case ddl::ColumnDefinition::INTERVAL:
+       return type_factory->get_interval();
+     case ddl::ColumnDefinition::UUID:
+@@ -288,16 +289,7 @@ ddl::TypeDefinition GoogleSqlTypeToDDLType(const googlesql::Type* type) {
+     type_def.set_proto_type_name(
+         type->AsEnum()->enum_descriptor()->full_name());
+   }
+-  if (type->IsExtendedType()) {
+-    if (type->Equals(postgres_translator::spangres::types::PgNumericMapping()
+-                         ->mapped_type())) {
+-      type_def.set_type(ddl::TypeDefinition::PG_NUMERIC);
+-    } else if (type->Equals(
+-                   postgres_translator::spangres::types::PgJsonbMapping()
+-                       ->mapped_type())) {
+-      type_def.set_type(ddl::TypeDefinition::PG_JSONB);
+-    }
+-  }
++  // Extended types (PG.NUMERIC, PG.JSONB) are unavailable in this build.
+   return type_def;
+ }
+ 
+@@ -344,16 +336,7 @@ ddl::ColumnDefinition GoogleSqlTypeToDDLColumnType(
+     ddl_column_def.set_proto_type_name(
+         type->AsEnum()->enum_descriptor()->full_name());
+   }
+-  if (type->IsExtendedType()) {
+-    if (type->Equals(postgres_translator::spangres::types::PgNumericMapping()
+-                         ->mapped_type())) {
+-      ddl_column_def.set_type(ddl::ColumnDefinition::PG_NUMERIC);
+-    } else if (type->Equals(
+-                   postgres_translator::spangres::types::PgJsonbMapping()
+-                       ->mapped_type())) {
+-      ddl_column_def.set_type(ddl::ColumnDefinition::PG_JSONB);
+-    }
+-  }
++  // Extended types (PG.NUMERIC, PG.JSONB) are unavailable in this build.
+   return ddl_column_def;
+ }
+ 
+diff --git a/backend/schema/updater/schema_updater.cc b/backend/schema/updater/schema_updater.cc
+index 318eed5..6b0f926 100644
+--- a/backend/schema/updater/schema_updater.cc
++++ b/backend/schema/updater/schema_updater.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/schema/updater/schema_updater.h"
+ 
+ #include <algorithm>
+@@ -122,16 +124,6 @@
+ #include "common/errors.h"
+ #include "common/feature_flags.h"
+ #include "common/limits.h"
+-#include "third_party/spanner_pg/ddl/ddl_translator.h"
+-#include "third_party/spanner_pg/ddl/pg_to_spanner_ddl_translator.h"
+-#include "third_party/spanner_pg/ddl/spangres_direct_schema_printer_impl.h"
+-#include "third_party/spanner_pg/ddl/spangres_schema_printer.h"
+-#include "third_party/spanner_pg/interface/emulator_parser.h"
+-#include "third_party/spanner_pg/interface/parser_output.h"
+-#include "third_party/spanner_pg/interface/pg_arena.h"
+-#include "third_party/spanner_pg/interface/spangres_translator_interface.h"
+-#include "third_party/spanner_pg/shims/error_shim.h"
+-#include "third_party/spanner_pg/shims/memory_context_pg_arena.h"
+ #include "google/protobuf/repeated_ptr_field.h"
+ #include "googlesql/public/functions/uuid.h"
+ 
+@@ -150,8 +142,12 @@ namespace backend {
+ namespace {
+ 
+ namespace database_api = ::google::spanner::admin::database::v1;
+-using ::postgres_translator::interfaces::ExpressionTranslateResult;
+-using ::postgres_translator::spangres::SpangresSchemaPrinter;
++// Local stand-in for postgres_translator::interfaces::ExpressionTranslateResult;
++// PostgreSQL expression translation is unavailable in this build.
++struct ExpressionTranslateResult {
++  std::string original_postgresql_expression;
++  std::string translated_googlesql_expression;
++};
+ typedef google::protobuf::RepeatedPtrField<ddl::SetOption> OptionList;
+ 
+ // A struct that defines the columns used by an index.
+@@ -920,17 +916,10 @@ SchemaUpdaterImpl::ApplyDDLStatement(
+                 create_function->has_sql_body_origin() &&
+                 create_function->sql_body_origin().has_original_expression());
+ 
+-            absl::StatusOr<std::unique_ptr<SpangresSchemaPrinter>> printer =
+-                postgres_translator::spangres::
+-                    CreateSpangresDirectSchemaPrinter();
+-            const ddl::DDLStatement& statement = *ddl_statement;
+-            GOOGLESQL_ASSIGN_OR_RETURN(
+-                std::vector<std::string> pg_printed,
+-                (*printer)->PrintDDLStatementForEmulator(statement));
+-            GOOGLESQL_RET_CHECK_EQ(pg_printed.size(), 1);
+-
+-            result = TranslatePostgreSqlQueryInUdf(
+-                absl::StripAsciiWhitespace(pg_printed[0]));
++            // The PG schema printer / translator are unavailable in this
++            // build.
++            result = absl::UnimplementedError(
++                "PostgreSQL dialect is not supported in this build");
+             if (!result.ok()) {
+               return error::FunctionBodyAnalysisError(
+                   create_function->function_name(), result.status().message());
+@@ -3006,100 +2995,26 @@ absl::Status MapSpangresDDLErrorToSpannerError(const absl::Status& status) {
+   }
+ }
+ 
+-// Translates Spangres SQL expression stored as a string in
+-// `original_expression` field and returns a translated GoogleSQL expression.
+-// When we first translate a Spangres DDL statement which contains an
+-// expression, like check constraints, generated column, and column default,
+-// we do not translate the expression. We translate it later when we have more
+-// table information.
++// PostgreSQL expression/query translation is unavailable in this build; the
++// original implementations delegated to //third_party/spanner_pg.
+ absl::StatusOr<ExpressionTranslateResult>
+ SchemaUpdaterImpl::TranslatePostgreSqlExpression(
+     const Table* table, const ddl::CreateTable* ddl_create_table,
+     absl::string_view expression) {
+-  std::vector<googlesql::SimpleTable::NameAndType> name_and_types;
+-  GOOGLESQL_RETURN_IF_ERROR(InitColumnNameAndTypesFromTable(table, ddl_create_table,
+-                                                  &name_and_types));
+-  googlesql::SimpleTable simple_table(table->Name(), name_and_types);
+-  // Setup a catalog for PostgreSQL analyzer needed to resolve provided AST.
+-  googlesql::SimpleCatalog catalog("pg simple catalog");
+-  catalog.AddTable(&simple_table);
+-
+-  // Setup googlesql::AnalyzerOptions needed for translation from PostgreSQL to
+-  // GoogleSQL.
+-  googlesql::AnalyzerOptions analyzer_options =
+-      MakeGoogleSqlAnalyzerOptions(GetTimeZone());
+-  analyzer_options.CreateDefaultArenasIfNotSet();
+-
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-      postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      ExpressionTranslateResult result,
+-      postgres_translator::spangres::TranslateTableLevelExpression(
+-          expression, simple_table.Name(), catalog, analyzer_options,
+-          type_factory_,
+-          std::make_unique<FunctionCatalog>(
+-              type_factory_,
+-              /*catalog_name=*/kCloudSpannerEmulatorFunctionCatalogName,
+-              /*schema=*/latest_schema_)),
+-      _.With(MapSpangresDDLErrorToSpannerError));
+-  return result;
++  return absl::UnimplementedError(
++      "PostgreSQL dialect is not supported in this build");
+ }
+ 
+ absl::StatusOr<ExpressionTranslateResult>
+ SchemaUpdaterImpl::TranslatePostgreSqlQueryInView(absl::string_view query) {
+-  googlesql::AnalyzerOptions analyzer_options =
+-      MakeGoogleSqlAnalyzerOptionsForViewsAndFunctions(
+-          GetTimeZone(), admin::database::v1::POSTGRESQL);
+-  analyzer_options.CreateDefaultArenasIfNotSet();
+-  FunctionCatalog function_catalog(
+-      type_factory_,
+-      /*catalog_name=*/kCloudSpannerEmulatorFunctionCatalogName,
+-      /*latest_schema=*/latest_schema_);
+-  Catalog catalog(latest_schema_, &function_catalog, type_factory_,
+-                  analyzer_options);
+-
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-      postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      ExpressionTranslateResult result,
+-      postgres_translator::spangres::TranslateQueryInView(
+-          query, catalog, analyzer_options, type_factory_,
+-          std::make_unique<FunctionCatalog>(
+-              type_factory_,
+-              /*catalog_name=*/kCloudSpannerEmulatorFunctionCatalogName,
+-              /*schema=*/latest_schema_)),
+-      _.With(MapSpangresDDLErrorToSpannerError));
+-  return result;
++  return absl::UnimplementedError(
++      "PostgreSQL dialect is not supported in this build");
+ }
+ 
+ absl::StatusOr<ExpressionTranslateResult>
+ SchemaUpdaterImpl::TranslatePostgreSqlQueryInUdf(absl::string_view query) {
+-  googlesql::AnalyzerOptions analyzer_options =
+-      MakeGoogleSqlAnalyzerOptionsForViewsAndFunctions(
+-          GetTimeZone(), admin::database::v1::POSTGRESQL);
+-  analyzer_options.CreateDefaultArenasIfNotSet();
+-  FunctionCatalog function_catalog(
+-      type_factory_,
+-      /*catalog_name=*/kCloudSpannerEmulatorFunctionCatalogName,
+-      /*latest_schema=*/latest_schema_);
+-  Catalog catalog(latest_schema_, &function_catalog, type_factory_,
+-                  analyzer_options);
+-
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-      postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
+-  GOOGLESQL_ASSIGN_OR_RETURN(
+-      ExpressionTranslateResult result,
+-      postgres_translator::spangres::TranslateFunctionBody(
+-          query, catalog, analyzer_options, type_factory_,
+-          std::make_unique<FunctionCatalog>(
+-              type_factory_,
+-              /*catalog_name=*/kCloudSpannerEmulatorFunctionCatalogName,
+-              /*schema=*/latest_schema_)),
+-      _.With(MapSpangresDDLErrorToSpannerError));
+-  return result;
++  return absl::UnimplementedError(
++      "PostgreSQL dialect is not supported in this build");
+ }
+ 
+ absl::Status SchemaUpdaterImpl::CreateCheckConstraint(
+@@ -7005,70 +6920,10 @@ SchemaUpdater::CreateSchemaFromDDL(
+ absl::StatusOr<std::unique_ptr<ddl::DDLStatement>> ParseDDLByDialect(
+     absl::string_view statement, database_api::DatabaseDialect dialect) {
+   if (dialect == database_api::DatabaseDialect::POSTGRESQL) {
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-        postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        postgres_translator::interfaces::ParserOutput parser_output,
+-        postgres_translator::CheckedPgRawParserFullOutput(
+-            std::string(statement).c_str()),
+-        _ << "failed to parse the DDL statements.");
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        std::unique_ptr<
+-            postgres_translator::spangres::PostgreSQLToSpannerDDLTranslator>
+-            translator,
+-        postgres_translator::spangres::
+-            CreatePostgreSQLToSpannerDDLTranslator());
+-    const postgres_translator::spangres::TranslationOptions options{
+-        .enable_nulls_ordering = true,
+-        .enable_interleave_in = true,
+-        .enable_generated_column = true,
+-        .enable_column_default = true,
+-        .enable_identity_column =
+-            EmulatorFeatureFlags::instance().flags().enable_identity_columns,
+-        .enable_default_sequence_kind =
+-            EmulatorFeatureFlags::instance().flags().enable_identity_columns,
+-        .enable_default_time_zone =
+-            EmulatorFeatureFlags::instance().flags().enable_default_time_zone,
+-        .enable_jsonb_type = true,
+-        .enable_array_jsonb_type = true,
+-        .enable_create_function = EmulatorFeatureFlags::instance()
+-                                      .flags()
+-                                      .enable_user_defined_functions,
+-        .enable_create_view = true,
+-        // This enables Spangres ddl translator to record the original
+-        // expression in PG.
+-        .enable_expression_string = true,
+-        .enable_if_not_exists = true,
+-        .enable_change_streams = true,
+-        .enable_change_streams_mod_type_filter_options = true,
+-        .enable_change_streams_ttl_deletes_filter_option = true,
+-        .enable_change_streams_allow_txn_exclusion_option = true,
+-        .enable_change_streams_if_not_exists = true,
+-        .enable_change_streams_partition_mode_option = true,
+-        .enable_search_index =
+-            EmulatorFeatureFlags::instance().flags().enable_search_index,
+-        .enable_columnar_policy = true,
+-        .enable_sequence = true,
+-        .enable_virtual_generated_column = true,
+-        .enable_hidden_column =
+-            EmulatorFeatureFlags::instance().flags().enable_hidden_column,
+-        .enable_serial_types = EmulatorFeatureFlags::instance()
+-                                   .flags()
+-                                   .enable_serial_auto_increment,
+-        .enable_uuid_type = true,
+-        .enable_tables_without_primary_keys =
+-            EmulatorFeatureFlags::instance()
+-                .flags()
+-                .enable_tables_without_primary_keys,
+-        .enable_alter_table_if_exists = EmulatorFeatureFlags::instance()
+-                                            .flags()
+-                                            .enable_alter_table_if_exists,
+-    };
+-    GOOGLESQL_ASSIGN_OR_RETURN(ddl::DDLStatementList ddl_statement_list,
+-                     translator->TranslateForEmulator(parser_output, options));
+-    GOOGLESQL_RET_CHECK_EQ(ddl_statement_list.statement_size(), 1);
+-    return std::make_unique<ddl::DDLStatement>(ddl_statement_list.statement(0));
++    // The PostgreSQL parser / DDL translator (//third_party/spanner_pg) are
++    // unavailable in this build.
++    return absl::UnimplementedError(
++        "PostgreSQL dialect is not supported in this build");
+   } else {
+     auto ddl_statement = std::make_unique<ddl::DDLStatement>();
+     GOOGLESQL_RETURN_IF_ERROR(ddl::ParseDDLStatement(statement, ddl_statement.get()));
+diff --git a/backend/schema/validators/BUILD b/backend/schema/validators/BUILD
+index 572f685..a50ec8c 100644
+--- a/backend/schema/validators/BUILD
++++ b/backend/schema/validators/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ 
+ package(
+@@ -75,7 +77,6 @@ cc_library(
+         "//common:errors",
+         "//common:feature_flags",
+         "//common:limits",
+-        "//third_party/spanner_pg/catalog:spangres_type",
+         "@com_google_absl//absl/algorithm:container",
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/container:flat_hash_set",
+diff --git a/backend/schema/validators/udf_validator.cc b/backend/schema/validators/udf_validator.cc
+index 0a26a6e..374d019 100644
+--- a/backend/schema/validators/udf_validator.cc
++++ b/backend/schema/validators/udf_validator.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/schema/validators/udf_validator.h"
+ 
+ #include <cstdint>
+@@ -47,7 +49,6 @@
+ #include "common/errors.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/catalog/spangres_type.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -77,19 +78,10 @@ absl::Status IsSupportedTypeForRemoteFunction(const googlesql::Type* type,
+     case googlesql::TYPE_UUID:
+       return absl::OkStatus();
+ 
+-    case googlesql::TYPE_EXTENDED: {
+-      if (type->Equals(
+-              postgres_translator::spangres::types::PgNumericMapping())) {
+-        return absl::OkStatus();
+-      } else if (type->Equals(
+-                     postgres_translator::spangres::types::PgJsonbMapping())) {
+-        return absl::OkStatus();
+-      } else if (type->Equals(
+-                     postgres_translator::spangres::types::PgOidMapping())) {
+-        return absl::OkStatus();
+-      }
++    // Extended types (PG.NUMERIC, PG.JSONB, PG.OID) are unavailable in this
++    // build.
++    case googlesql::TYPE_EXTENDED:
+       break;
+-    }
+ 
+     case googlesql::TYPE_ARRAY:
+       return IsSupportedTypeForRemoteFunction(type->AsArray()->element_type(),
+diff --git a/backend/transaction/BUILD b/backend/transaction/BUILD
+index 07971bb..e625ff6 100644
+--- a/backend/transaction/BUILD
++++ b/backend/transaction/BUILD
+@@ -14,6 +14,8 @@
+ # limitations under the License.
+ #
+ 
++# MODIFIED by go-spanner-analyzer: removed //third_party/spanner_pg deps.
++
+ load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ load("@rules_cc//cc:cc_test.bzl", "cc_test")
+ 
+@@ -62,8 +64,6 @@ cc_library(
+         "//common:config",
+         "//common:constants",
+         "//common:errors",
+-        "//third_party/spanner_pg/interface:pg_arena_factory",
+-        "//third_party/spanner_pg/shims:memory_context_pg_arena",
+         "@com_google_absl//absl/algorithm:container",
+         "@com_google_absl//absl/base:core_headers",
+         "@com_google_absl//absl/container:flat_hash_map",
+diff --git a/backend/transaction/read_write_transaction.cc b/backend/transaction/read_write_transaction.cc
+index 7fbf226..8980ca6 100644
+--- a/backend/transaction/read_write_transaction.cc
++++ b/backend/transaction/read_write_transaction.cc
+@@ -14,6 +14,8 @@
+ // limitations under the License.
+ //
+ 
++// MODIFIED by go-spanner-analyzer: PostgreSQL dialect support removed (GoogleSQL only).
++
+ #include "backend/transaction/read_write_transaction.h"
+ 
+ #include <functional>
+@@ -73,8 +75,6 @@
+ #include "common/errors.h"
+ #include "googlesql/base/ret_check.h"
+ #include "googlesql/base/status_macros.h"
+-#include "third_party/spanner_pg/interface/pg_arena.h"
+-#include "third_party/spanner_pg/shims/memory_context_pg_arena.h"
+ 
+ namespace google {
+ namespace spanner {
+@@ -501,14 +501,8 @@ absl::Status ReadWriteTransaction::Write(const Mutation& mutation) {
+     mu_.AssertHeld();
+     ForeignKeyRestrictions fk_restrictions;
+ 
+-    // When writing, comparison may be required in the process. Comparison of
+-    // PG.NUMERIC calls PG to get comparison result (see function
+-    // ValueContentLess in datatypes/extended/pg_numeric_type.cc) and therefore
+-    // requires a PG arena.
+-    GOOGLESQL_VLOG(1) << "Creating memory context and Processing Write mutations";
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-        postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
++    // PG arena for PG.NUMERIC comparison is not needed in this build.
++    GOOGLESQL_VLOG(1) << "Processing Write mutations";
+ 
+     for (const MutationOp& mutation_op : mutation.ops()) {
+       GOOGLESQL_ASSIGN_OR_RETURN(
+@@ -614,14 +608,8 @@ absl::Status ReadWriteTransaction::Commit() {
+     }
+     GOOGLESQL_RETURN_IF_ERROR(ProcessChangeStreamWriteOps());
+ 
+-    // When committing, comparison may be required in the process. Comparison of
+-    // PG.NUMERIC calls PG to get comparison result (see function
+-    // ValueContentLess in datatypes/extended/pg_numeric_type.cc) and therefore
+-    // requires a PG arena.
+-    GOOGLESQL_VLOG(1) << "Creating memory context and Committing transaction";
+-    GOOGLESQL_ASSIGN_OR_RETURN(
+-        std::unique_ptr<postgres_translator::interfaces::PGArena> arena,
+-        postgres_translator::spangres::MemoryContextPGArena::Init(nullptr));
++    // PG arena for PG.NUMERIC comparison is not needed in this build.
++    GOOGLESQL_VLOG(1) << "Committing transaction";
+ 
+     // Pick a commit timestamp.
+     GOOGLESQL_ASSIGN_OR_RETURN(commit_timestamp_, lock_handle_->ReserveCommitTimestamp());
