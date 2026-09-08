@@ -53,3 +53,6 @@
 - 02:20 対処: wasm2go はメモリ食いなので Docker（上限 20 GB、Rosetta）ではなく **ホストの Mac（48 GB、arm64 ネイティブ）で実行**。wasmify のソースからプラグインをビルドし、`build/syntax-proto/` を入力に `build/syntax-wasm2go-host/` へ生成中
 - 02:10 P3（本命版 `facade`）の wasmify パイプラインを開始（`classify` → `build` → `generate-build` → `fix_build_json` → `validate-build` → `parse-headers` → bridge(full) → `gen-proto` → `wasm-build`）。Bazel と `wasm-build` は直列
 - 教訓: パイプ越しの終了コードは `PIPESTATUS` で取る。`grep -v` で握りつぶすと OOM に気づけない
+- 02:17 ホストで wasm2go 生成成功（62 秒、最大 2.7 GB。Docker 内で OOM したのはコンテナ上限と Rosetta のため）。出力は `internal/wasm2go/{p0,p1}` に分割される規模。外部参照の空スタブは 13 個（wasm の実 import と一致）
+- 02:19 **wasm2go 版（純 Go、`CGO_ENABLED=0`）で `ParseDDL` のテスト成功（amd64、Rosetta で実行）。** 純 Go 化の経路は端から端まで成立
+- 02:19 arm64 用アセンブリだけ壊れる: `p0/arm64.s` 26 万行・`p1/arm64.s` 5.6 万行に `github.com/tyzerrr/go-spanner-N(RSP)` `...-m+N(FP)` `...-lN+N(FP)` の形でモジュールパスが混入（amd64.s は無傷）。玩具（別 import path、分割なし）では起きなかった。wasm2go v0.5.15 の arm64 出力の不具合と見ている。切り分け中: wasm2go の import path をモジュール外（`github.com/tyzerrr/spanneranalyzerwasm2go`、googlesql-wasm と同じ流儀）にして再生成
