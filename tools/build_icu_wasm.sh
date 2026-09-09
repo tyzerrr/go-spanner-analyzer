@@ -43,11 +43,18 @@ export CFLAGS="$COMMON" CXXFLAGS="$COMMON -std=c++17" CPPFLAGS="" LDFLAGS="-lwas
 # 失敗するので、データは genccode の C 配列出力で別途作る
 make -j"$JOBS" > make-wasm.log 2>&1 || echo "（make は packagedata で失敗する想定。ライブラリ本体は生成済み）"
 test -f lib/libicuuc.a && test -f lib/libicui18n.a || { tail -60 make-wasm.log; exit 1; }
-echo "==> [3/4] データを tools/icu-filter.json で絞って作り直す（ホストの道具を使う。--with-data-packaging=archive で .dat だけ得る）"
-FILTER=${ICU_DATA_FILTER_FILE:-/work/tools/icu-filter.json}
-mkdir -p "$OUT/host-trim" && ( cd "$OUT/host-trim" && ICU_DATA_FILTER_FILE="$FILTER" "$SRC/source/runConfigureICU" Linux $CONF --with-data-packaging=archive --with-cross-build="$OUT/host" > configure.log 2>&1 && make -j"$JOBS" -C data > make-data.log 2>&1 ) || { tail -30 "$OUT/host-trim/make-data.log"; exit 1; }
+echo "==> [3/4] データを絞る（icupkg で、同梱の事前ビルド済み .dat から tools/icu-keep.txt 以外を取り除く）"
+# googlesql が使う ICU の配布物には元データ（coll/ locales/ の .txt）が無く、事前ビルド済みの
+# data/in/icudt*.dat だけが同梱されている。ICU_DATA_FILTER_FILE はソースから作るときにしか効かないので、
+# icupkg で項目を削る。残すのは正規化・照合の基本（root）・共通表のみ（大文字小文字を同一視する比較が目的）。
+KEEP=${ICU_KEEP_LIST:-/work/tools/icu-keep.txt}
+PRE=$(ls "$SRC"/source/data/in/icudt*.dat | head -1)
+mkdir -p "$OUT/trim" && "$OUT/host/bin/icupkg" -l "$PRE" > "$OUT/trim/all.txt"
+grep -vxF -f "$KEEP" "$OUT/trim/all.txt" > "$OUT/trim/remove.txt"
+cp "$PRE" "$OUT/trim/$(basename "$PRE")" && "$OUT/host/bin/icupkg" -r "$OUT/trim/remove.txt" "$OUT/trim/$(basename "$PRE")"
+ls -la "$OUT/trim/"*.dat
 echo "==> [4/4] libicudata.a を C 配列経由で作る（genccode は wasm の .o を扱えないため）"
-DAT=$(ls "$OUT"/host-trim/data/out/icudt*.dat "$OUT"/host-trim/data/out/tmp/icudt*.dat 2>/dev/null | head -1); VER=$(basename "$DAT" .dat | sed -E "s/^icudt([0-9]+)[lb]$/\\1/")
+DAT=$(ls "$OUT"/trim/icudt*.dat | head -1); VER=$(basename "$DAT" .dat | sed -E "s/^icudt([0-9]+)[lb]$/\\1/")
 mkdir -p data-c && ( cd data-c && "$OUT/host/bin/genccode" -e "icudt$VER" -d . "$DAT" \
   && "$CC" $CFLAGS -I"$SRC/source/common" -c icudt${VER}l_dat.c -o icudt${VER}l_dat.o \
   && "$AR" rcs ../lib/libicudata.a icudt${VER}l_dat.o )

@@ -122,7 +122,9 @@
 - 09:57 判断: 通し実行の `make wasm --no-cache` は 85 分で 307/1,261（googlesql の大きなファイル群で 1 分/ファイル、直列・Rosetta）。数時間かかるので**中断**。Makefile の `wasm` は既定でキャッシュを使うよう変更し、全部作り直しは `NOCACHE=1` に。クリーンな作り直しの確認は Linux（CI）で行う方針
 - 09:58 `make bridge STAGE=full` で ICU の 3 つの `.a` を `wasm_build.prebuilt_archives` に入れ、キャッシュ利用で `make wasm` → wasm を作り直し中。続けて外部参照の数と wazero 版のテストを確認
 - 10:25 **ICU を組み込んだ wasm が完成。** `spanner_emulator.wasm` 46.4 MB（最適化前 51.5 MB。ICU のデータ 32 MB を含む）。外部参照は env 87 → **45、ICU 由来は 0**。wazero 版で `ParseDDL` / `ValidateDDL` のテスト通過。成果物は `build/full-icu/`
-- 残課題（ICU 関連）: (1) wasm が 46 MB に膨らんだ。ICU のデータフィルタ（`ICU_DATA_FILTER_FILE`）で googlesql が使う分（照合・正規化・大文字小文字）だけに絞れば大幅に減らせる。(2) 純 Go 版（wasm2go）は 46 MB の wasm だとメモリが約 40 GB 必要な見込みなので、フィルタで縮めてから再生成する。(3) ICU が実際に呼ばれる経路（非 ASCII の照合など）の動作確認
+- ~~残課題（ICU 関連）: wasm 46 MB~~ → **解決**（12:12）: ICU データを 31.9 MB → 2.0 MB に絞り、wasm は 46.4 MB → **17.4 MB**
 - 10:40 ICU のデータを絞る作業を開始。方針（作者の判断）: 大文字小文字を同一視する比較ができれば十分。`tools/icu-filter.json`（additive: 正規化・照合の基本データ・root ロケール・misc のみ）でホスト側のデータだけ作り直し → `libicudata.a` を作り直し → wasm を再リンク → 大きさ・外部参照・テストを確認中
 - 11:55 絞り込み 1 回目は効かなかった（.dat が 31.9 MB のまま）。原因: googlesql が使う ICU の配布物には**元データ（coll/ locales/ 等の .txt）が無く、事前ビルド済みの `data/in/icudt76l.dat` だけが同梱**されている。`ICU_DATA_FILTER_FILE` はソースからデータを作るときにしか効かない
 - 12:00 対処: ICU 同梱の道具 `icupkg` で事前ビルド済みの .dat から不要な項目を**取り除く**方式に変更（`icupkg -l` で一覧 → 残すもの以外を `-r` で削除）。残すのは正規化（`*.nrm`）、照合の基本（`ucadata.icu`、`coll/root.res`）、root ロケール、共通表（`supplementalData` 等）
+- 12:12 **ICU データの絞り込み成功。** `icupkg` で 4,136 項目 → 23 項目（正規化 `nfkc*.nrm` `uts46.nrm`、照合の基本 `coll/ucadata.icu` `coll/root.res`、root ロケール、共通表）。`libicudata.a` 31.9 MB → **2.0 MB**。wasm は 46.4 MB → **17.4 MB**（最適化前 24.2 MB）。wazero 版テスト通過。残すものの一覧は `tools/icu-keep.txt`、手順は `tools/build_icu_wasm.sh` に反映
+- 12:15 絞った wasm から純 Go 版（wasm2go）を再生成中（ホスト）
