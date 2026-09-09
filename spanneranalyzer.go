@@ -915,6 +915,38 @@ var _ = errors.New
 var _ = fmt.Errorf
 var _ = runtime.SetFinalizer
 
+// Analyzes one query or DML statement (GoogleSQL dialect) against the schema
+// the DDL statements describe, the way the emulator does before executing
+// it: names are resolved against that schema's tables, columns, indexes and
+// functions, and the statement is type checked. Returns an empty vector when
+// the statement is valid.
+//
+// If the DDL itself does not build, that error is returned and the statement
+// is not looked at. An error in the statement carries its 1-based line and
+// column within `sql`; statement_index is always -1.
+func AnalyzeQuery(ddls []string, sql string) ([]*ValidationError, error) {
+	buf := pbNewBuf()
+	for _, item := range ddls {
+		buf = pbAppendString(buf, 1, item)
+	}
+	buf = pbAppendString(buf, 2, sql)
+	resp, err := invokeMethod(0, 0, buf, wasm2go.Inv_0_0)
+	if err != nil {
+		return nil, err
+	}
+	var items []*ValidationError
+	pr := &pbReader{data: resp}
+	for f, w, ok := pr.next(); ok; f, w, ok = pr.next() {
+		if f == 1 {
+			sub := pr.readSubmessage()
+			items = append(items, unmarshalValidationError(sub.data))
+		} else {
+			pr.skip(w)
+		}
+	}
+	return items, nil
+}
+
 // Checks the syntax of each DDL statement (GoogleSQL dialect) with the
 // emulator's DDL parser. Does not look at schema semantics, so every
 // statement is checked independently and all errors are returned.
@@ -923,7 +955,7 @@ func ParseDDL(ddls []string) ([]*ValidationError, error) {
 	for _, item := range ddls {
 		buf = pbAppendString(buf, 1, item)
 	}
-	resp, err := invokeMethod(0, 0, buf, wasm2go.Inv_0_0)
+	resp, err := invokeMethod(0, 1, buf, wasm2go.Inv_0_1)
 	if err != nil {
 		return nil, err
 	}
@@ -950,7 +982,7 @@ func ValidateDDL(ddls []string) ([]*ValidationError, error) {
 	for _, item := range ddls {
 		buf = pbAppendString(buf, 1, item)
 	}
-	resp, err := invokeMethod(0, 1, buf, wasm2go.Inv_0_1)
+	resp, err := invokeMethod(0, 2, buf, wasm2go.Inv_0_2)
 	if err != nil {
 		return nil, err
 	}

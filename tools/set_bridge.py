@@ -7,6 +7,7 @@ d = json.load(open(p))
 exports = ["spanner_analyzer::ParseDDL"]
 if stage == "full":
     exports.append("spanner_analyzer::ValidateDDL")
+    exports.append("spanner_analyzer::AnalyzeQuery")
 d["bridge"] = {
     "ExportFunctions": exports,
     # googlesql-wasm と同じ: absl / protobuf の型はブリッジせず素通しにする

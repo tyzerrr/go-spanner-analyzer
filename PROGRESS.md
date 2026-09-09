@@ -8,7 +8,7 @@
 |---|---|
 | 構文のみ `ParseDDL` | 完了。wazero 版 / 純 Go 版（amd64・arm64）で動作。他 OS へクロスコンパイル可 |
 | 意味まで `ValidateDDL` | **完了。** wazero 版 / 純 Go 版（arm64）で動作。5 種の意味エラーを本物と同じ文言で検出 |
-| クエリ `AnalyzeQuery` | 未着手（第 3 段階） |
+| クエリ・DML `AnalyzeQuery` | **完了。** 純 Go 版で動作。位置は文中の 1 始まりの行・列（`ErrorLocation` payload）。v0.2.0 として公開 |
 
 数字: 本命 wasm 14.8 MB → 純 Go 720 MB（3,800 万行）。wasm2go 変換 7 分・13.3 GB（ホストで実行）。テストはビルド込み 21 秒、`ValidateDDL` 自体は瞬時。
 
@@ -28,6 +28,28 @@
 再現の最短経路（ホスト）: `make classify STAGE=full && make build && make headers` の後に `python3 tools/fix_build_json.py`（コンテナ内、`validate-build` 後）→ `make bridge STAGE=full proto wasm` → `make go-host` → `build/wasm2go-host` で `go test`
 
 夜間作業のログ。新しいものが上。
+
+## 2026-09-10
+
+### 第 3 段階（クエリ・DML の意味解析 `AnalyzeQuery`）
+
+- 02:00 着手。目的: spnls でクエリと DML に意味の診断（存在しない列・型の不一致）を出す
+- 調査で分かったこと:
+  - **クエリ解析に要る部品は既に今の wasm に入っている。** `facade` は `backend/schema/verifiers:interleaving_verifiers` 経由で `//backend/query:catalog` に到達しており、`catalog.cc` `function_catalog.cc` `googlesql/public/analyzer.cc` `error_helpers.cc` は `wasm-build.json` にコンパイル済み。足すのは facade の数十行だけ。再ビルドは facade.cc の再コンパイルとリンクで済む見込み
+  - **エラー位置は構造で取れる。** `AnalyzerOptions` を `ERROR_MESSAGE_WITH_PAYLOAD` にすると位置がメッセージ文字列ではなく `ErrorLocation` の payload に入り、`googlesql::GetErrorLocation()` で 1 始まりの `line` / `column` が取れる。bqls のように `[at 1:8]` を文字列から掻き出す必要が無い
+  - `//backend/query:catalog` / `:function_catalog` はパッチ 0001 の範囲に入っていて、`spanner_pg` / gRPC / google-cloud-cpp への到達は 0（`tools/bazel_deps_walk.py`）
+  - `UpdateSchemaFromDDL` の `num_successful_statements` は **backfill の失敗時にしか埋まらない**。意味検証の失敗は `StatusOr` の status で返り、`ApplyDDLStatements` は範囲 for で添字を数えていない（`GOOGLESQL_ASSIGN_OR_RETURN` で即 return）。文の番号を取るにはエミュレータ本体の改造が要る → **やらない**。spnls 側の二分探索（log2(n) 回）で足りる
+  - `ValidateSchemaFromDDL` の `existing_schema` 引数も **使わない**。`Schema*` は wasm の境界を越えられず、呼び出し間で持ち回れないので、DDL を連結して渡すのと結果が変わらない
+- 02:20 facade に `AnalyzeQuery(ddls, sql)` を追加（`facade.{h,cc}`、`BUILD`）。エミュレータの `backend/query/catalog_test.cc:70-92` と同じ経路: DDL からスキーマを組む（`ValidateDDL` と共通化して `BuildSchema`）→ `FunctionCatalog` → `Catalog` → `googlesql::AnalyzeStatement`。時間帯は `UTC` 固定（解析は時刻リテラルを評価しないので結果に影響せず、機械に依存しない）。DDL 側が壊れていればその誤りを返してクエリは見ない
+- 02:31 素の Bazel でネイティブビルド成功（1 分 12 秒、実行 6 手順。facade.cc のみ）。`patches/0002-add-facade.patch` を作り直し（454 行）。`tools/set_bridge.py` の `full` に `AnalyzeQuery` を追加
+- 02:33 `tools/split_bundle.py` を追加: 前回手作業だった「生成物を入れ子モジュールに分けて go.mod を書き、タグの順を出す」を道具化。既存の生成物で試して公開済みの配置（14 モジュール、同じ大きさ）を再現することを確認
+- 02:34 `make build` → 4,200 手順を記録（aquery 経由なので実行は 1 手順でも全件取れる）。続けて `headers → bridge(full) → proto → wasm → go-host` を一続きで実行中
+- 03:02 **1 回目の wasm は壊れていた**: 大きさは 17.4 MB で通ったが、env import が 45 → 46 に増え、増えた 1 つが `spanner_analyzer::AnalyzeQuery` 自身。`obj/facade.o` の mtime が 9/9 08:30（ソースは 9/10 02:30）で、古い .o がリンクされていた。原因は wasm-build のキャッシュ（`build-cache.json`）が **`args_hash`（コマンド引数）だけで判定し、ソースの中身を見ない**こと。ハンズオンで踏んだ「ソース変更後にキャッシュを使うと空スタブが混入」と同じ
+- 03:04 対処: `tools/invalidate_wasm_cache.py`（指定した出力の項目と実体だけ消す）を追加し、`/obj/facade.o` `/libfacade.a` を消して `make wasm` を再実行。`make wasm-invalidate FILES=...` として Makefile にも載せた。リンク後に env import に `AnalyzeQuery` が残っていないことを確かめてから `go-host` へ進む手順にした
+- 03:15 2 回目の wasm: env import **45**、`AnalyzeQuery` 解決済み、17.4 MB。`go-host` はツールの背景タスクとして走らせると 2 回とも途中で殺された（ホスト上で 9〜13 GB を使う工程だけ）ので、`setsid nohup` でツールのプロセス群から切り離して実行 → 7 分半で完了（生成物 749 MB、14 パッケージ、空スタブ 0）
+- 03:40 **第 3 段階 完了。** 純 Go（arm64、`CGO_ENABLED=0`）で `TestAnalyzeQuery` 通過。位置は推測で書いた期待値（1:15 / 1:8 / 1:29 / 2:6 / 1:20）が全て一致。存在しないテーブル・列、型の不一致、2 行目の誤り、DML の誤りを本物と同じ文言で検出。時間帯は `UTC` 固定
+- 03:45 公開: `spanneranalyzerwasm2go` **v0.2.0**（`tools/split_bundle.py` で分割、14 タグ。`git tag` は設定で注釈付きが要るので `-a -m`）。`go-spanner-analyzer` **v0.2.0**。`sum.golang.org` は push 直後だとタグを 404 で返す（6 分待っても）ので、自分のモジュールの間は `GONOSUMDB=github.com/tyzerrr/* GOPROXY=direct` で tidy した
+- 教訓: `make` を回すループの終了コードは `PIPESTATUS`（bash）で取る。zsh では `pipestatus`。混ぜると空文字になって誤って止まる
 
 ## 2026-09-09
 

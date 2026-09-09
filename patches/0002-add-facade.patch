@@ -1,9 +1,9 @@
 diff --git a/backend/schema/facade/BUILD b/backend/schema/facade/BUILD
 new file mode 100644
-index 0000000..205ee06
+index 0000000..7ee6b78
 --- /dev/null
 +++ b/backend/schema/facade/BUILD
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,76 @@
 +# Copyright 2026 Taichi Araki (go-spanner-analyzer)
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,7 +51,9 @@ index 0000000..205ee06
 +)
 +
 +# Full check: builds and validates a schema with SchemaUpdater
-+# (same path as the emulator's CreateDatabase / UpdateDatabaseDdl).
++# (same path as the emulator's CreateDatabase / UpdateDatabaseDdl), and
++# analyzes a query against it with the emulator's own catalog (same path as
++# its ExecuteSql before evaluation).
 +cc_library(
 +    name = "facade",
 +    srcs = ["facade.cc"],
@@ -61,20 +63,29 @@ index 0000000..205ee06
 +        ":syntax",
 +        "//backend/common:ids",
 +        "//backend/database/pg_oid_assigner",
++        "//backend/query:analyzer_options",
++        "//backend/query:catalog",
++        "//backend/query:function_catalog",
 +        "//backend/schema/catalog:schema",
 +        "//backend/schema/updater:schema_updater",
++        "@com_google_absl//absl/status",
 +        "@com_google_absl//absl/status:statusor",
 +        "@com_google_absl//absl/types:span",
 +        "@com_google_googleapis//google/spanner/admin/database/v1:database_cc_proto",
++        "@com_google_googlesql//googlesql/public:analyzer",
++        "@com_google_googlesql//googlesql/public:analyzer_options",
++        "@com_google_googlesql//googlesql/public:analyzer_output",
++        "@com_google_googlesql//googlesql/public:error_helpers",
++        "@com_google_googlesql//googlesql/public:error_location_cc_proto",
 +        "@com_google_googlesql//googlesql/public:type",
 +    ],
 +)
 diff --git a/backend/schema/facade/facade.cc b/backend/schema/facade/facade.cc
 new file mode 100644
-index 0000000..8e4b935
+index 0000000..abefea9
 --- /dev/null
 +++ b/backend/schema/facade/facade.cc
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,143 @@
 +// Copyright 2026 Taichi Araki (go-spanner-analyzer)
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -98,11 +109,20 @@ index 0000000..8e4b935
 +#include <vector>
 +
 +#include "google/spanner/admin/database/v1/common.pb.h"
++#include "googlesql/public/analyzer.h"
++#include "googlesql/public/analyzer_options.h"
++#include "googlesql/public/analyzer_output.h"
++#include "googlesql/public/error_helpers.h"
++#include "googlesql/public/error_location.pb.h"
 +#include "googlesql/public/type.h"
++#include "absl/status/status.h"
 +#include "absl/status/statusor.h"
 +#include "absl/types/span.h"
 +#include "backend/common/ids.h"
 +#include "backend/database/pg_oid_assigner/pg_oid_assigner.h"
++#include "backend/query/analyzer_options.h"
++#include "backend/query/catalog.h"
++#include "backend/query/function_catalog.h"
 +#include "backend/schema/catalog/schema.h"
 +#include "backend/schema/updater/schema_updater.h"
 +
@@ -111,18 +131,28 @@ index 0000000..8e4b935
 +namespace backend = ::google::spanner::emulator::backend;
 +namespace database_api = ::google::spanner::admin::database::v1;
 +
-+// Mirrors tests/common/schema_constructor.cc: a fresh type factory and ID
-+// generators per call; no storage (validation only, no backfills).
-+std::vector<ValidationError> ValidateDDL(const std::vector<std::string>& ddls) {
++namespace {
++
++// Everything a built schema keeps pointers into. The schema borrows the type
++// factory and the ID generators, so they live here next to it and go away
++// together.
++struct BuiltSchema {
 +  googlesql::TypeFactory type_factory;
 +  backend::TableIDGenerator table_id_gen;
 +  backend::ColumnIDGenerator column_id_gen;
-+  backend::PgOidAssigner pg_oid_assigner(/*enabled=*/false);
++  backend::PgOidAssigner pg_oid_assigner{/*enabled=*/false};
++  std::unique_ptr<const backend::Schema> schema;
++  absl::Status status;
++};
++
++// Mirrors tests/common/schema_constructor.cc: a fresh type factory and ID
++// generators per call; no storage (validation only, no backfills).
++void BuildSchema(const std::vector<std::string>& ddls, BuiltSchema* out) {
 +  backend::SchemaChangeContext context{
-+      .type_factory = &type_factory,
-+      .table_id_generator = &table_id_gen,
-+      .column_id_generator = &column_id_gen,
-+      .pg_oid_assigner = &pg_oid_assigner,
++      .type_factory = &out->type_factory,
++      .table_id_generator = &out->table_id_gen,
++      .column_id_generator = &out->column_id_gen,
++      .pg_oid_assigner = &out->pg_oid_assigner,
 +      .database_id = "go-spanner-analyzer",
 +  };
 +  backend::SchemaUpdater updater;
@@ -133,11 +163,67 @@ index 0000000..8e4b935
 +              .proto_descriptor_bytes = "",
 +              .database_dialect = database_api::GOOGLE_STANDARD_SQL},
 +          context);
-+  std::vector<ValidationError> errors;
 +  if (!result.ok()) {
++    out->status = result.status();
++    return;
++  }
++  out->schema = std::move(*result);
++}
++
++}  // namespace
++
++std::vector<ValidationError> ValidateDDL(const std::vector<std::string>& ddls) {
++  BuiltSchema built;
++  BuildSchema(ddls, &built);
++  std::vector<ValidationError> errors;
++  if (!built.status.ok()) {
 +    // The emulator reports one error and stops; we do not know which
 +    // statement caused it, so statement_index is -1.
-+    errors.push_back(internal::MakeError(result.status().message(), -1));
++    errors.push_back(internal::MakeError(built.status.message(), -1));
++  }
++  return errors;
++}
++
++// Mirrors backend/query/catalog_test.cc: the emulator's own catalog over the
++// built schema, handed to the GoogleSQL analyzer.
++std::vector<ValidationError> AnalyzeQuery(const std::vector<std::string>& ddls,
++                                          const std::string& sql) {
++  std::vector<ValidationError> errors;
++
++  BuiltSchema built;
++  BuildSchema(ddls, &built);
++  if (!built.status.ok()) {
++    errors.push_back(internal::MakeError(built.status.message(), -1));
++    return errors;
++  }
++
++  backend::FunctionCatalog function_catalog(
++      &built.type_factory, backend::kCloudSpannerEmulatorFunctionCatalogName,
++      built.schema.get());
++  function_catalog.SetLatestSchema(built.schema.get());
++
++  // The time zone only affects how timestamp literals evaluate, which
++  // analysis never does; UTC keeps the result independent of the machine.
++  googlesql::AnalyzerOptions options =
++      backend::MakeGoogleSqlAnalyzerOptions("UTC");
++  // Keep the location out of the message text and in the payload instead, so
++  // the caller gets a line and a column rather than " [at 1:8]" to parse.
++  options.set_error_message_mode(
++      googlesql::AnalyzerOptions::ERROR_MESSAGE_WITH_PAYLOAD);
++
++  backend::Catalog catalog(built.schema.get(), &function_catalog,
++                           &built.type_factory, options);
++  std::unique_ptr<const googlesql::AnalyzerOutput> output;
++  absl::Status status = googlesql::AnalyzeStatement(
++      sql, options, &catalog, &built.type_factory, &output);
++  if (!status.ok()) {
++    ValidationError error = internal::MakeError(status.message(), -1);
++    googlesql::ErrorLocation location;
++    if (googlesql::GetErrorLocation(status, &location)) {
++      error.line = location.line();
++      error.column = location.column();
++    }
++    errors.push_back(error);
 +  }
 +  return errors;
 +}
@@ -145,10 +231,10 @@ index 0000000..8e4b935
 +}  // namespace spanner_analyzer
 diff --git a/backend/schema/facade/facade.h b/backend/schema/facade/facade.h
 new file mode 100644
-index 0000000..4c3f3da
+index 0000000..87fd9db
 --- /dev/null
 +++ b/backend/schema/facade/facade.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,49 @@
 +// Copyright 2026 Taichi Araki (go-spanner-analyzer)
 +//
 +// Licensed under the Apache License, Version 2.0 (the "License");
@@ -182,6 +268,18 @@ index 0000000..4c3f3da
 +// indexes, foreign keys, ...). Stops at the first error, like the emulator.
 +// Returns an empty vector when the DDL is valid.
 +std::vector<ValidationError> ValidateDDL(const std::vector<std::string>& ddls);
++
++// Analyzes one query or DML statement (GoogleSQL dialect) against the schema
++// the DDL statements describe, the way the emulator does before executing
++// it: names are resolved against that schema's tables, columns, indexes and
++// functions, and the statement is type checked. Returns an empty vector when
++// the statement is valid.
++//
++// If the DDL itself does not build, that error is returned and the statement
++// is not looked at. An error in the statement carries its 1-based line and
++// column within `sql`; statement_index is always -1.
++std::vector<ValidationError> AnalyzeQuery(const std::vector<std::string>& ddls,
++                                          const std::string& sql);
 +
 +}  // namespace spanner_analyzer
 +
