@@ -13,9 +13,29 @@ cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と
 
 Day1 は GoogleSQL 方言のみ。PostgreSQL 方言と gRPC はビルドから外している（`patches/`）。ICU は wasm 向けに自前ビルドしてリンクしている（`tools/build_icu_wasm.sh`）。
 
+## 使い方
+
+```go
+import "github.com/tyzerrr/go-spanner-analyzer"
+
+func main() {
+    if err := spanneranalyzer.Init(); err != nil { panic(err) }
+    errs, err := spanneranalyzer.ValidateDDL([]string{
+        "CREATE TABLE Singers (SingerId INT64 NOT NULL, Name STRING(MAX)) PRIMARY KEY (SingerId)",
+        "CREATE INDEX Bad ON Singers(NoSuchColumn)",
+    })
+    // errs[0].Message == "Index Bad specifies key column NoSuchColumn which does not exist in the index's base table."
+}
+```
+
+`go get github.com/tyzerrr/go-spanner-analyzer` で入る。純 Go の本体（約 750 MB のソース）は
+`github.com/tyzerrr/spanneranalyzerwasm2go` から取得される。初回のビルドだけ数十秒かかる。
+
 ## 構成
 
 ```
+spanneranalyzer.go        Go の API（wasmify が生成した呼び出し口）
+go.mod                    spanneranalyzerwasm2go に依存
 cloud-spanner-emulator/   上流（git submodule、コミット固定）
 patches/                  上流への変更（PostgreSQL 除去、ファサード追加）
 wasmify.json arch.json    wasmify の設定

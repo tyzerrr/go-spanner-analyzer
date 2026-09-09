@@ -129,3 +129,5 @@
 - 12:12 **ICU データの絞り込み成功。** `icupkg` で 4,136 項目 → 23 項目（正規化 `nfkc*.nrm` `uts46.nrm`、照合の基本 `coll/ucadata.icu` `coll/root.res`、root ロケール、共通表）。`libicudata.a` 31.9 MB → **2.0 MB**。wasm は 46.4 MB → **17.4 MB**（最適化前 24.2 MB）。wazero 版テスト通過。残すものの一覧は `tools/icu-keep.txt`、手順は `tools/build_icu_wasm.sh` に反映
 - 12:15 絞った wasm から純 Go 版（wasm2go）を再生成中（ホスト）
 - 12:39 **絞った wasm（17.4 MB）から純 Go 版を再生成、テスト通過。** 生成 11 分半（ホスト）。生成物 749 MB / 3,950 万行、空スタブ 45（wasm の実 import と一致）。arm64 ネイティブ `CGO_ENABLED=0` で `ParseDDL` `ValidateDDL` 通過、linux/amd64・linux/arm64 へクロスコンパイル可。成果物は `build/trim-wasm2go-host/`。これが `spanneranalyzerwasm2go` として公開する候補
+- 13:12 **バンドルを公開（非公開リポジトリ）**: `github.com/tyzerrr/spanneranalyzerwasm2go` v0.1.0（749 MB のソース、git の圧縮後 175 MB。Apache-2.0、NOTICE・THIRD_PARTY_NOTICES 同梱）
+- 13:15 **API 側を整備**: `go-spanner-analyzer` の root に `go.mod`（`replace` なしでバンドル v0.1.0 に依存）、`spanneranalyzer.go`、`doc.go`、テスト 2 本を配置。`go mod tidy` と純 Go でのテストを通し、v0.1.0 としてタグ付け。非公開リポジトリなので利用側は `GOPRIVATE=github.com/tyzerrr/*` が要る
