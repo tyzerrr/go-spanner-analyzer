@@ -1,6 +1,6 @@
 .wasmify/
 # 再生成できるもの（googlesql-wasm と同じ方針）
-build/
+build/*
 build.json
 api-spec.json
 proto/
