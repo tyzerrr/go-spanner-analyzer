@@ -6,3 +6,4 @@ api-spec.json
 proto/
 bridge/
 bazel-*
+!build/go.mod

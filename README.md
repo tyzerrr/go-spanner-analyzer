@@ -29,7 +29,9 @@ func main() {
 ```
 
 `go get github.com/tyzerrr/go-spanner-analyzer` で入る。純 Go の本体（約 750 MB のソース）は
-`github.com/tyzerrr/spanneranalyzerwasm2go` から取得される。初回のビルドだけ数十秒かかる。
+`github.com/tyzerrr/spanneranalyzerwasm2go` から取得される。Go のモジュールは 1 つ 500 MiB までなので、
+本体は 14 個の入れ子モジュール（root、`base`、`p0`〜`p11`）に分かれている。初回のビルドだけ数十秒かかる。
+どちらも非公開リポジトリのあいだは `GOPRIVATE=github.com/tyzerrr/*` が要る。
 
 ## 構成
 

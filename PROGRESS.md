@@ -132,3 +132,5 @@
 - 13:12 **バンドルを公開（非公開リポジトリ）**: `github.com/tyzerrr/spanneranalyzerwasm2go` v0.1.0（749 MB のソース、git の圧縮後 175 MB。Apache-2.0、NOTICE・THIRD_PARTY_NOTICES 同梱）
 - 13:15 **API 側を整備**: `go-spanner-analyzer` の root に `go.mod`（`replace` なしでバンドル v0.1.0 に依存）、`spanneranalyzer.go`、`doc.go`、テスト 2 本を配置。`go mod tidy` と純 Go でのテストを通し、v0.1.0 としてタグ付け。非公開リポジトリなので利用側は `GOPRIVATE=github.com/tyzerrr/*` が要る
 - 13:20 **Go モジュールの上限（1 モジュール 500 MiB）に引っかかった。** 749 MB のバンドルは `go get` で `module source tree too large` になる（goccy の前例は 388 MB で収まっている）。対処: バンドルを入れ子モジュールに分割（root、`base`、`p0`〜`p11` の 14 モジュール。各 51〜77 MB。import path は不変。依存は root → p11 → p10 → … → p0 → base の一方向）。タグは `base/v0.1.1` `p0/v0.1.1` … `v0.1.1`。壊れていた v0.1.0 のタグは両リポジトリから削除
+- 13:23 **利用者の立場での確認に成功**: まっさらな一時モジュールで `go get github.com/tyzerrr/go-spanner-analyzer@v0.1.1` → 入れ子の 14 モジュールが取得され、`CGO_ENABLED=0 go run` で `ValidateDDL` が `Index Bad specifies key column NoSuchColumn ...` を返した（取得 15 秒、初回ビルド 32 秒）
+- 13:30 API リポジトリ内の `go mod tidy` が `build/` 以下の生成物（古い import path を持つ）を拾って失敗し、`go.sum` の無いまま v0.1.1 を出してしまった（利用側は自分で go.sum を作るので動いていた）。`build/go.mod` を置いてモジュール境界の外に出し、`go.sum` を入れて **v0.1.2** として出し直し
