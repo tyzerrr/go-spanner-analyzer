@@ -105,6 +105,10 @@
     "build_type": "library"
   },
   "bridge": {
+    "ExportFunctions": [
+      "spanner_analyzer::ParseDDL",
+      "spanner_analyzer::ValidateDDL"
+    ],
     "ExternalTypes": [
       "absl::Status",
       "absl::StatusOr",
@@ -132,17 +136,12 @@
       "googlesql_base::StatusOr": "if (!{result}.ok()) { _pw.write_error(std::string({result}.status().message())); }"
     },
     "GoPackage": "github.com/tyzerrr/go-spanner-analyzer;spanneranalyzer",
-    "Wasm2GoImportPath": "github.com/tyzerrr/spanneranalyzerwasm2go",
-    "ExportFunctions": [
-      "spanner_analyzer::ParseDDL",
-      "spanner_analyzer::ValidateDDL"
-    ],
-    "ExportDependentLibraries": {
-      "googlesql": false,
-      "protobuf": false
-    }
+    "Wasm2GoImportPath": "github.com/tyzerrr/spanneranalyzerwasm2go"
   },
   "skip": {
+    "deploy_stub_headers": [
+      "net/if.h"
+    ],
     "files": [
       {
         "path": "external/abseil-cpp~/absl/debugging/symbolize.cc",
@@ -167,19 +166,12 @@
       {
         "path": "external/abseil-cpp~/absl/log/internal/globals.cc",
         "reason": "uses platform-specific log infrastructure; bridged API surface does not log"
-      },
-      {
-        "path": "external/googlesql~/googlesql/base/net/public_suffix_oss.cc",
-        "reason": "does not compile under wasi-sdk/libc++; external, not needed for DDL validation (auto-skipped)"
       }
-    ],
-    "deploy_stub_headers": [
-      "net/if.h"
     ]
   },
   "phases": {
     "gen-proto": {
-      "completed_at": "2026-09-08T21:46:28Z",
+      "completed_at": "2026-09-08T23:30:06Z",
       "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
       "output_files": [
         "proto/spanneranalyzer.proto",
@@ -189,12 +181,19 @@
       ]
     },
     "parse-headers": {
-      "completed_at": "2026-09-08T21:46:28Z",
+      "completed_at": "2026-09-08T23:30:05Z",
       "upstream_commit": "fc811a1a93c7e4784db7f48fe15e72fe94f39d38",
       "output_files": [
         "api-spec.json"
       ]
     }
   },
-  "analyzed_at": "2026-09-08T15:21:36Z"
+  "analyzed_at": "2026-09-08T15:21:36Z",
+  "wasm_build": {
+    "prebuilt_archives": [
+      "/work/build/icu/wasm/lib/libicui18n.a",
+      "/work/build/icu/wasm/lib/libicuuc.a",
+      "/work/build/icu/wasm/lib/libicudata.a"
+    ]
+  }
 }

@@ -11,7 +11,7 @@ cgo も外部プロセスも不要で、`go install` だけで Spanner 本物と
 | 2 | `ValidateDDL(ddls []string)` 意味まで（主キー・INTERLEAVE・索引・外部キー…） | **動作確認済み**（wazero 版と純 Go 版の両方。親テーブル無し・主キーに ARRAY・主キーに無い列・索引に無い列・重複を本物と同じ文言で検出） |
 | 3 | `AnalyzeQuery(sql string)` クエリの意味解析 | 未着手 |
 
-Day1 は GoogleSQL 方言のみ。PostgreSQL 方言はビルドから外している（`patches/`）。
+Day1 は GoogleSQL 方言のみ。PostgreSQL 方言と gRPC はビルドから外している（`patches/`）。ICU は wasm 向けに自前ビルドしてリンクしている（`tools/build_icu_wasm.sh`）。
 
 ## 構成
 

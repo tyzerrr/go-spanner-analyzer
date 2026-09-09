@@ -19,7 +19,7 @@
 4. wasm2go は Docker 内で OOM するのでホストで実行（`tools/gen_go_host.sh`、`make go-host`）
 
 残っている課題:
-- **ICU が wasm にリンクされていない**（外部参照 87 個の大半）。`rules_foreign_cc` 製のため記録に入らない。ASCII の DDL には影響しないが、要対処（`wasm_build.prebuilt_archives`）
+- ~~ICU が wasm にリンクされていない~~ → **解決**（09:00 台）。ICU 76.1 を wasm 向けに自前ビルドし `prebuilt_archives` でリンク。外部参照 87 → 45（ICU 由来 0）。残りは absl のログ関連と例外の受け口
 - 公開の形: 生成物（720 MB）をどう配布するか。googlesql-wasm 同様、変換物は別モジュール `github.com/tyzerrr/spanneranalyzerwasm2go` として出す前提で `replace` を使っている
 - `facade` の BUILD 依存に不足がある可能性（cc_library は未定義シンボルを検出しない）
 - wasm2go の arm64 不具合（**import path にハイフンがあると壊れる**。当初「モジュール配下だから」と考えたのは誤りで、玩具で切り分けて訂正）は上流に報告する（`docs/wasm2go-arm64-hyphen.md`）
@@ -121,3 +121,5 @@
 - 次: 通し実行の完了後、`wasm_build.prebuilt_archives` に 3 つを渡して wasm を作り直し、外部参照 87 個の減少と wazero 版テストを確認
 - 09:57 判断: 通し実行の `make wasm --no-cache` は 85 分で 307/1,261（googlesql の大きなファイル群で 1 分/ファイル、直列・Rosetta）。数時間かかるので**中断**。Makefile の `wasm` は既定でキャッシュを使うよう変更し、全部作り直しは `NOCACHE=1` に。クリーンな作り直しの確認は Linux（CI）で行う方針
 - 09:58 `make bridge STAGE=full` で ICU の 3 つの `.a` を `wasm_build.prebuilt_archives` に入れ、キャッシュ利用で `make wasm` → wasm を作り直し中。続けて外部参照の数と wazero 版のテストを確認
+- 10:25 **ICU を組み込んだ wasm が完成。** `spanner_emulator.wasm` 46.4 MB（最適化前 51.5 MB。ICU のデータ 32 MB を含む）。外部参照は env 87 → **45、ICU 由来は 0**。wazero 版で `ParseDDL` / `ValidateDDL` のテスト通過。成果物は `build/full-icu/`
+- 残課題（ICU 関連）: (1) wasm が 46 MB に膨らんだ。ICU のデータフィルタ（`ICU_DATA_FILTER_FILE`）で googlesql が使う分（照合・正規化・大文字小文字）だけに絞れば大幅に減らせる。(2) 純 Go 版（wasm2go）は 46 MB の wasm だとメモリが約 40 GB 必要な見込みなので、フィルタで縮めてから再生成する。(3) ICU が実際に呼ばれる経路（非 ASCII の照合など）の動作確認

@@ -26,7 +26,8 @@ build:    ; $(DOCKER) bash -c 'wasmify build --non-interactive && wasmify genera
 headers:  ; $(DOCKER) bash -c 'wasmify validate-build && python3 tools/fix_build_json.py build.json && wasmify parse-headers'
 bridge:   ; python3 tools/set_bridge.py $(STAGE)
 proto:    ; $(DOCKER) wasmify gen-proto --package $(PACKAGE)
-wasm:     ; $(DOCKER) wasmify wasm-build --optimize --non-interactive --no-cache
+# 既定はキャッシュ利用。全部作り直すときは make wasm NOCACHE=1（Rosetta 経由の直列コンパイルで数時間かかる）
+wasm:     ; $(DOCKER) wasmify wasm-build --optimize --non-interactive $(if $(NOCACHE),--no-cache,)
 go:       ; $(DOCKER) buf generate
 # wasm2go はメモリを食うのでホストで生成する（Docker 内では OOM になった）
 go-host:  ; mkdir -p build/proto-host && cp -R proto/. build/proto-host/ && cp tools/proto-buf.yaml build/proto-host/buf.yaml && tools/gen_go_host.sh build/proto-host .wasmify/wasm-build/output/spanner_emulator.wasm build/wasm2go-host
