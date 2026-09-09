@@ -55,7 +55,7 @@ Tracks Cloud Spanner Emulator
 |---|---|---|
 | `ParseDDL(ddls []string)` | Syntax only | Available (amd64/arm64; linux/windows/darwin) |
 | `ValidateDDL(ddls []string)` | Semantics (keys, INTERLEAVE, indexes, FKs, …) | Available |
-| `AnalyzeQuery(sql string)` | Query semantic analysis | Not started |
+| `AnalyzeQuery(ddls []string, sql string)` | Query and DML semantics: names resolved against the schema the DDL describes, and the statement type-checked. Errors carry a 1-based line and column within the statement | **Working** (v0.2.0) |
 
 The public API is still settling.
 

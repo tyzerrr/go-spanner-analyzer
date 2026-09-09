@@ -7,3 +7,4 @@ proto/
 bridge/
 bazel-*
 !build/go.mod
+__pycache__/
