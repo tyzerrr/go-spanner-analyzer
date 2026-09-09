@@ -128,3 +128,4 @@
 - 12:00 対処: ICU 同梱の道具 `icupkg` で事前ビルド済みの .dat から不要な項目を**取り除く**方式に変更（`icupkg -l` で一覧 → 残すもの以外を `-r` で削除）。残すのは正規化（`*.nrm`）、照合の基本（`ucadata.icu`、`coll/root.res`）、root ロケール、共通表（`supplementalData` 等）
 - 12:12 **ICU データの絞り込み成功。** `icupkg` で 4,136 項目 → 23 項目（正規化 `nfkc*.nrm` `uts46.nrm`、照合の基本 `coll/ucadata.icu` `coll/root.res`、root ロケール、共通表）。`libicudata.a` 31.9 MB → **2.0 MB**。wasm は 46.4 MB → **17.4 MB**（最適化前 24.2 MB）。wazero 版テスト通過。残すものの一覧は `tools/icu-keep.txt`、手順は `tools/build_icu_wasm.sh` に反映
 - 12:15 絞った wasm から純 Go 版（wasm2go）を再生成中（ホスト）
+- 12:39 **絞った wasm（17.4 MB）から純 Go 版を再生成、テスト通過。** 生成 11 分半（ホスト）。生成物 749 MB / 3,950 万行、空スタブ 45（wasm の実 import と一致）。arm64 ネイティブ `CGO_ENABLED=0` で `ParseDDL` `ValidateDDL` 通過、linux/amd64・linux/arm64 へクロスコンパイル可。成果物は `build/trim-wasm2go-host/`。これが `spanneranalyzerwasm2go` として公開する候補
