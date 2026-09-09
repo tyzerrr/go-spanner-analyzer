@@ -119,3 +119,5 @@
 - 08:50 **wasm2go の不具合の原因を訂正**: 玩具で 4 通り試した結果、arm64 アセンブリが壊れるのは **import path にハイフンが含まれるとき**（3 万行混入）。モジュール配下かどうかは無関係（ハイフン無しなら配下でも 0 行）。amd64 は常に無傷。`go-spanner-analyzer` にハイフンがあるため配下に置くと踏んだ、が正しい説明。再現手順を `docs/wasm2go-arm64-hyphen.md` に記録
 - 08:45 **ICU 76.1 を wasm32-wasip1 向けにビルドできた**（`tools/build_icu_wasm.sh`、11 分）: `libicuuc.a` 2.7 MB、`libicui18n.a` 4.8 MB。ICU の `configure` は wasm を知らないので `mh-linux` を使うよう 1 行足した。最後の `packagedata` だけ失敗（ICU の `genccode` が wasm の .o を ELF として読めない）→ データは `genccode -e icudt76`（C 配列出力）→ wasi clang でコンパイル → `libicudata.a` 31.9 MB、として別途作成。入口シンボルは `icudt76_dat`
 - 次: 通し実行の完了後、`wasm_build.prebuilt_archives` に 3 つを渡して wasm を作り直し、外部参照 87 個の減少と wazero 版テストを確認
+- 09:57 判断: 通し実行の `make wasm --no-cache` は 85 分で 307/1,261（googlesql の大きなファイル群で 1 分/ファイル、直列・Rosetta）。数時間かかるので**中断**。Makefile の `wasm` は既定でキャッシュを使うよう変更し、全部作り直しは `NOCACHE=1` に。クリーンな作り直しの確認は Linux（CI）で行う方針
+- 09:58 `make bridge STAGE=full` で ICU の 3 つの `.a` を `wasm_build.prebuilt_archives` に入れ、キャッシュ利用で `make wasm` → wasm を作り直し中。続けて外部参照の数と wazero 版のテストを確認
