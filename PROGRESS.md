@@ -123,3 +123,4 @@
 - 09:58 `make bridge STAGE=full` で ICU の 3 つの `.a` を `wasm_build.prebuilt_archives` に入れ、キャッシュ利用で `make wasm` → wasm を作り直し中。続けて外部参照の数と wazero 版のテストを確認
 - 10:25 **ICU を組み込んだ wasm が完成。** `spanner_emulator.wasm` 46.4 MB（最適化前 51.5 MB。ICU のデータ 32 MB を含む）。外部参照は env 87 → **45、ICU 由来は 0**。wazero 版で `ParseDDL` / `ValidateDDL` のテスト通過。成果物は `build/full-icu/`
 - 残課題（ICU 関連）: (1) wasm が 46 MB に膨らんだ。ICU のデータフィルタ（`ICU_DATA_FILTER_FILE`）で googlesql が使う分（照合・正規化・大文字小文字）だけに絞れば大幅に減らせる。(2) 純 Go 版（wasm2go）は 46 MB の wasm だとメモリが約 40 GB 必要な見込みなので、フィルタで縮めてから再生成する。(3) ICU が実際に呼ばれる経路（非 ASCII の照合など）の動作確認
+- 10:40 ICU のデータを絞る作業を開始。方針（作者の判断）: 大文字小文字を同一視する比較ができれば十分。`tools/icu-filter.json`（additive: 正規化・照合の基本データ・root ロケール・misc のみ）でホスト側のデータだけ作り直し → `libicudata.a` を作り直し → wasm を再リンク → 大きさ・外部参照・テストを確認中
